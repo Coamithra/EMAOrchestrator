@@ -101,5 +101,26 @@ describe('parseRunbookContent', () => {
       const runbook = parseRunbookContent(md)
       expect(runbook.phases[0].steps[0].title).toBe('Step one')
     })
+
+    it('does not treat H3 headers as phases', () => {
+      const md = '## Real Phase\n### Sub-heading\n1. **Step** Do it.\n'
+      const runbook = parseRunbookContent(md)
+      expect(runbook.phases).toHaveLength(1)
+      expect(runbook.phases[0].name).toBe('Real Phase')
+    })
+
+    it('strips leading em-dash from descriptions', () => {
+      const md = '## Phase\n1. **Pull latest main** — `git pull origin main` to stay current\n'
+      const runbook = parseRunbookContent(md)
+      expect(runbook.phases[0].steps[0].description).toBe(
+        '`git pull origin main` to stay current'
+      )
+    })
+
+    it('captures unindented continuation lines', () => {
+      const md = '## Phase\n1. **Step** First line.\nSecond line here.\n'
+      const runbook = parseRunbookContent(md)
+      expect(runbook.phases[0].steps[0].description).toContain('Second line here.')
+    })
   })
 })

@@ -34,7 +34,7 @@ export function parseRunbookContent(markdown: string): Runbook {
 
   for (const line of lines) {
     // H2 header → new phase
-    const h2Match = line.match(/^##\s+(.+)/)
+    const h2Match = line.match(/^##(?!#)\s+(.+)/)
     if (h2Match) {
       flushPhase()
       currentPhase = { name: h2Match[1].trim(), steps: [] }
@@ -57,7 +57,7 @@ export function parseRunbookContent(markdown: string): Runbook {
           phase: currentPhase.name,
           index: currentPhase.steps.length + 1,
           title: boldMatch[1].trim(),
-          description: boldMatch[2].trim()
+          description: boldMatch[2].replace(/^—\s*/, '').trim()
         }
       } else {
         // No bold title — use entire content as title
@@ -71,8 +71,8 @@ export function parseRunbookContent(markdown: string): Runbook {
       continue
     }
 
-    // Continuation line for the current step (indented or non-empty text that isn't a header)
-    if (currentStep && line.match(/^\s+\S/) ) {
+    // Continuation line for the current step (indented or any non-blank text)
+    if (currentStep && line.trim().length > 0) {
       currentStep.description += (currentStep.description ? ' ' : '') + line.trim()
     }
   }
