@@ -14,7 +14,7 @@
 
 ### CLI Interaction Model (Spike #003)
 
-**Decision:** Use the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) for all CLI interaction. The SDK wraps `--output-format stream-json` with typed TypeScript interfaces, `canUseTool` callbacks for permissions, and `AskUserQuestion` for user input. xterm.js renders a synthetic terminal fed by `StreamEvent` text deltas — no node-pty or real PTY needed.
+**Decision:** Use the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) for all CLI interaction. The SDK's `query()` returns an AsyncGenerator yielding typed `SDKMessage` objects. Permissions are handled via `canUseTool` callback; `AskUserQuestion` arrives as a tool-use event in the message stream. xterm.js renders a synthetic terminal fed by `stream_event` text deltas — no node-pty or real PTY needed.
 
 **Why not PTY?** Detecting permissions and step completion from ANSI-encoded Ink/React TUI output is fragile and breaks on Claude Code updates. The orchestrator needs structured events, not terminal scraping.
 

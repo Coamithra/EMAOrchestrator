@@ -81,7 +81,7 @@ Use Anthropic's official TypeScript SDK, which internally spawns Claude Code wit
 **Pros:**
 - Typed `StreamEvent` objects in TypeScript
 - `canUseTool` callback for permission handling — no parsing needed
-- `AskUserQuestion` callback for clarifying questions
+- `AskUserQuestion` arrives as a tool-use event in the message stream (not a dedicated callback)
 - Multi-turn via streaming input mode
 - Zero native dependencies
 - Official, maintained by Anthropic
@@ -127,10 +127,11 @@ Use Anthropic's official TypeScript SDK, which internally spawns Claude Code wit
 ### How It Works
 
 1. **Orchestrator** calls `query()` with a step-specific prompt and config
-2. **StreamEvents** flow to the renderer via IPC, where xterm.js renders text deltas as they arrive
+2. **StreamEvents** flow to the renderer via IPC, where xterm.js renders text deltas as they arrive (the `query()` AsyncGenerator yields `SDKMessage` objects including `stream_event` types)
 3. **Permission requests** trigger `canUseTool` callback → IPC to renderer → custom permission UI → user decision → callback response
-4. **Step completion** detected from the `result` event's `subtype` field
-5. **Multi-turn** supported via the SDK's streaming input mode
+4. **User questions** arrive as `AskUserQuestion` tool-use events in the message stream — detected and routed to the UI like permissions
+5. **Step completion** detected from the `result` event's `subtype` field
+6. **Multi-turn** supported via the SDK's streaming input mode
 
 ### Why Not PTY?
 
@@ -144,7 +145,7 @@ The Agent SDK (Option D) wraps raw stream-json (Option A) with:
 - Official maintenance — when the protocol changes, the SDK updates
 - Battle-tested by Anthropic's own tooling
 
-The cold-start overhead (~12s first call, ~2-3s subsequent) is acceptable since each agent runs a multi-step session lasting minutes to hours.
+The cold-start overhead (~12s first call, ~2-3s subsequent) is acceptable since each agent runs a multi-step session lasting minutes to hours. Note: the SDK is pre-1.0 (`0.2.x`), so breaking API changes are possible — pin the version in `package.json`.
 
 ### xterm.js Role
 
@@ -169,7 +170,7 @@ xterm.js will render a **synthetic terminal view** — not a real PTY. We feed `
 - Receives permission requests from `canUseTool` callback via IPC
 - Renders as a custom React UI (tool name, input details, allow/deny buttons)
 - Sends user decision back via IPC to resolve the callback
-- Also handles `AskUserQuestion` events
+- Also handles `AskUserQuestion` tool-use events from the message stream (these are regular tool calls, not a dedicated callback)
 
 ---
 

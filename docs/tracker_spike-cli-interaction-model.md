@@ -41,7 +41,7 @@ Card: #003 Spike: CLI interaction model (pipes vs PTY vs stream-json)
 
 ## Phase 6: Review & Ship
 
-- [ ] Update CLAUDE.md if needed
+- [x] Update CLAUDE.md if needed
 - [ ] Commit & push
 - [ ] Peer review (fresh agent)
 - [ ] Pull main into branch
