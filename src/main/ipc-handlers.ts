@@ -8,8 +8,16 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('config:save', async (_event, config: AppConfig) => {
-    await saveConfig(config)
-    return await validateConfig(config)
+    const result = await validateConfig(config)
+    const allOk =
+      result.targetRepoPath?.ok &&
+      result.contributingMdPath?.ok &&
+      result.trelloConnection?.ok &&
+      result.claudeCliPath?.ok
+    if (allOk) {
+      await saveConfig(config)
+    }
+    return result
   })
 
   ipcMain.handle('config:validate', async (_event, config: AppConfig) => {
@@ -20,8 +28,8 @@ export function registerIpcHandlers(): void {
     return await configExists()
   })
 
-  ipcMain.handle('dialog:openDirectory', async () => {
-    const win = BrowserWindow.getFocusedWindow()
+  ipcMain.handle('dialog:openDirectory', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
     if (!win) return null
     const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory']
@@ -29,8 +37,8 @@ export function registerIpcHandlers(): void {
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('dialog:openFile', async (_event, filters?: Electron.FileFilter[]) => {
-    const win = BrowserWindow.getFocusedWindow()
+  ipcMain.handle('dialog:openFile', async (event, filters?: Electron.FileFilter[]) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
     if (!win) return null
     const result = await dialog.showOpenDialog(win, {
       properties: ['openFile'],

@@ -25,12 +25,18 @@ export async function loadConfig(): Promise<AppConfig | null> {
   try {
     const raw = await readFile(configPath(), 'utf-8')
     const parsed = JSON.parse(raw)
-    return { ...DEFAULT_CONFIG, ...parsed }
+    // Deep-merge nested objects so partial saved configs don't lose default sub-keys
+    return {
+      ...DEFAULT_CONFIG,
+      ...parsed,
+      trelloListNames: { ...DEFAULT_CONFIG.trelloListNames, ...parsed.trelloListNames }
+    }
   } catch {
     return null
   }
 }
 
+// TODO: encrypt trelloApiKey/trelloApiToken at rest using Electron safeStorage
 export async function saveConfig(config: AppConfig): Promise<void> {
   await writeFile(configPath(), JSON.stringify(config, null, 2), 'utf-8')
 }
@@ -106,7 +112,7 @@ async function validateTrelloConnection(
 async function validateClaudeCli(cliPath: string): Promise<FieldStatus> {
   const cmd = cliPath || 'claude'
   try {
-    await execFileAsync(cmd, ['--version'], { shell: true, timeout: 5000 })
+    await execFileAsync(cmd, ['--version'], { timeout: 5000 })
     return { ok: true }
   } catch {
     const label = cliPath ? `Not found at: ${cliPath}` : 'Not found on PATH'

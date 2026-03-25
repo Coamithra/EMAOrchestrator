@@ -10,16 +10,21 @@ function App(): React.JSX.Element {
   const [config, setConfig] = useState<AppConfig | null>(null)
 
   useEffect(() => {
-    window.api.configExists().then((exists) => {
-      if (!exists) {
+    window.api
+      .configExists()
+      .then(async (exists) => {
+        if (!exists) {
+          setView('settings')
+          return
+        }
+        const cfg = await window.api.loadConfig()
+        setConfig(cfg)
+        setView('main')
+      })
+      .catch(() => {
+        // Config read failed — fall back to first-run settings
         setView('settings')
-      } else {
-        window.api.loadConfig().then((cfg) => {
-          setConfig(cfg)
-          setView('main')
-        })
-      }
-    })
+      })
   }, [])
 
   function handleConfigSaved(cfg: AppConfig): void {

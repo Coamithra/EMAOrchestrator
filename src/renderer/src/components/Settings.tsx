@@ -123,7 +123,7 @@ function Settings({
             />
           </SettingsField>
 
-          <SettingsField label="API Token">
+          <SettingsField label="API Token" status={validation?.trelloConnection}>
             <div className="settings__token-row">
               <input
                 type={showToken ? 'text' : 'password'}
@@ -141,7 +141,7 @@ function Settings({
             </div>
           </SettingsField>
 
-          <SettingsField label="Board ID">
+          <SettingsField label="Board ID" status={validation?.trelloConnection}>
             <input
               type="text"
               value={config.trelloBoardId}
@@ -200,7 +200,10 @@ function Settings({
               min={1}
               max={10}
               value={config.maxConcurrentAgents}
-              onChange={(e) => update('maxConcurrentAgents', Number(e.target.value))}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10)
+                if (!isNaN(n)) update('maxConcurrentAgents', Math.max(1, Math.min(10, n)))
+              }}
             />
           </SettingsField>
         </section>
