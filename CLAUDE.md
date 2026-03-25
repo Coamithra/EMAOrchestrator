@@ -24,13 +24,18 @@
 
 Central controller pattern: orchestrator parses the runbook into discrete steps, spawns one Claude CLI session per Trello card (each in its own git worktree), feeds step-specific prompts, detects completion, and advances automatically.
 
-## Development
+## Development Workflow
+
+**Every Trello card must follow the runbook in [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).** This is a 6-phase, 29-step process: pick up → research → design → implement → verify → review & ship. No skipping phases. Create a tracker doc before starting.
+
+### Commands
 
 - `npm run dev` — Launch Electron app with hot reload
 - `npm run build` — TypeScript check + production build
 - `npm run typecheck` — TypeScript type checking only
 - `npm run lint` — Run ESLint
 - `npm run format` — Run Prettier
+- `npx vitest run` — Run unit tests
 
 ## Project Structure
 
