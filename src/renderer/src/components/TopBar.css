@@ -1,0 +1,33 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 16px;
+  background: var(--color-background-soft);
+  border-bottom: 1px solid var(--ev-c-gray-3);
+  -webkit-app-region: drag;
+}
+
+.topbar__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.topbar__settings {
+  -webkit-app-region: no-drag;
+  background: none;
+  border: none;
+  color: var(--ev-c-text-2);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.topbar__settings:hover {
+  color: var(--color-text);
+  background: var(--ev-c-gray-3);
+}

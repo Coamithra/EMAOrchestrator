@@ -1,0 +1,208 @@
+.settings {
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.settings__card {
+  width: 100%;
+  max-width: 600px;
+}
+
+.settings__title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.settings__subtitle {
+  color: var(--ev-c-text-2);
+  margin-bottom: 24px;
+}
+
+.settings__section {
+  margin-bottom: 24px;
+}
+
+.settings__section-title {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ev-c-text-2);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+/* Field layout */
+.settings-field {
+  margin-bottom: 16px;
+}
+
+.settings-field__label {
+  display: block;
+  font-size: 13px;
+  color: var(--ev-c-text-2);
+  margin-bottom: 4px;
+}
+
+.settings-field__input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-field__input {
+  flex: 1;
+}
+
+.settings-field__input input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--ev-c-gray-3);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.settings-field__input input:focus {
+  outline: none;
+  border-color: var(--ev-c-gray-1);
+  background: var(--ev-c-gray-2);
+}
+
+.settings-field__input input[type='number'] {
+  max-width: 100px;
+}
+
+.settings-field__browse {
+  padding: 8px 12px;
+  background: var(--ev-c-gray-3);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ev-c-text-1);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.settings-field__browse:hover {
+  background: var(--ev-c-gray-2);
+}
+
+.settings-field__status {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.settings-field__status--ok {
+  color: #4caf50;
+}
+
+.settings-field__status--error {
+  color: #f44336;
+}
+
+.settings-field__error {
+  font-size: 12px;
+  color: #f44336;
+  margin-top: 4px;
+}
+
+/* Token row */
+.settings__token-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.settings__token-row input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--ev-c-gray-3);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.settings__token-row input:focus {
+  outline: none;
+  border-color: var(--ev-c-gray-1);
+  background: var(--ev-c-gray-2);
+}
+
+.settings__token-toggle {
+  padding: 8px 12px;
+  background: var(--ev-c-gray-3);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ev-c-text-2);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.settings__token-toggle:hover {
+  background: var(--ev-c-gray-2);
+}
+
+/* Subgroup (Trello list names) */
+.settings__subgroup {
+  padding-left: 16px;
+  margin-top: 12px;
+}
+
+.settings__subgroup-label {
+  display: block;
+  font-size: 13px;
+  color: var(--ev-c-text-2);
+  margin-bottom: 8px;
+}
+
+/* Action buttons */
+.settings__actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ev-c-gray-3);
+}
+
+.settings__btn {
+  padding: 8px 20px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.settings__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings__btn--primary {
+  background: #4caf50;
+  color: #fff;
+}
+
+.settings__btn--primary:hover:not(:disabled) {
+  background: #43a047;
+}
+
+.settings__btn--secondary {
+  background: var(--ev-c-gray-3);
+  color: var(--ev-c-text-1);
+}
+
+.settings__btn--secondary:hover:not(:disabled) {
+  background: var(--ev-c-gray-2);
+}

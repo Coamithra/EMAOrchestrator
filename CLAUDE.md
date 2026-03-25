@@ -26,15 +26,32 @@ Central controller pattern: orchestrator parses the runbook into discrete steps,
 
 ## Project Structure
 
+- `src/shared/` — Types and constants shared between main process and renderer
 - `src/main/` — Electron main process
 - `src/preload/` — Preload scripts (context bridge for IPC)
 - `src/renderer/` — React frontend (Vite-bundled)
 - `electron.vite.config.ts` — Vite config for main/preload/renderer
 - `electron-builder.yml` — Packaging configuration
 
+## Conventions
+
+### Import Aliases
+
+- `@renderer/*` — maps to `src/renderer/src/*` (renderer only)
+- `@shared/*` — maps to `src/shared/*` (renderer only; main/preload use relative imports)
+
+### IPC Channels
+
+Named `namespace:action` (e.g., `config:load`, `dialog:openDirectory`). All use `ipcMain.handle` / `ipcRenderer.invoke` (async request-response). Handlers registered in `src/main/ipc-handlers.ts`, exposed to renderer via the `api` object in `src/preload/index.ts` (typed in `src/preload/index.d.ts`).
+
+### Configuration
+
+App config stored at `app.getPath('userData')/config.json`. Config service in `src/main/config-service.ts`. Schema defined in `src/shared/config.ts`.
+
 ## Worktree Layout
 
 The repo is checked out in a `main/` subfolder to support git worktrees:
+
 ```
 C:\Programming\EMAOrchestrator\
   main/          ← git repo root (main branch)
