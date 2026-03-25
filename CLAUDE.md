@@ -9,8 +9,16 @@
 ## Tech Stack
 
 - Electron + React + TypeScript (desktop app)
-- xterm.js (embedded terminal per agent)
-- Node.js child_process (spawns Claude CLI as subprocess with stdin/stdout pipes)
+- `@anthropic-ai/claude-agent-sdk` (spawns Claude CLI, provides typed events and permission callbacks)
+- xterm.js (synthetic terminal display — fed by SDK StreamEvents, not a real PTY)
+
+### CLI Interaction Model (Spike #003)
+
+**Decision:** Use the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) for all CLI interaction. The SDK wraps `--output-format stream-json` with typed TypeScript interfaces, `canUseTool` callbacks for permissions, and `AskUserQuestion` for user input. xterm.js renders a synthetic terminal fed by `StreamEvent` text deltas — no node-pty or real PTY needed.
+
+**Why not PTY?** Detecting permissions and step completion from ANSI-encoded Ink/React TUI output is fragile and breaks on Claude Code updates. The orchestrator needs structured events, not terminal scraping.
+
+**Full decision doc:** `docs/spike-003-cli-interaction-model.md`
 
 ## Architecture
 
@@ -32,6 +40,8 @@ Central controller pattern: orchestrator parses the runbook into discrete steps,
 - `src/renderer/` — React frontend (Vite-bundled)
 - `electron.vite.config.ts` — Vite config for main/preload/renderer
 - `electron-builder.yml` — Packaging configuration
+- `docs/` — Decision docs, spike write-ups, tracker files
+- `spikes/` — Proof-of-concept scripts from research spikes
 
 ## Conventions
 
