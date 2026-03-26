@@ -31,27 +31,25 @@ function App(): React.JSX.Element {
       })
   }, [])
 
-  // Load agents when entering main view
-  useEffect(() => {
-    if (view !== 'main') return
-    window.api
-      .listAgents()
-      .then(setAgents)
-      .catch(() => setAgents([]))
-  }, [view])
-
-  // Subscribe to real-time agent events from the main process
+  // Load agents and subscribe to real-time events in a single effect to avoid
+  // race conditions between the initial fetch and event listener setup.
   useEffect(() => {
     if (view !== 'main') return
 
+    // Subscribe first so no events are missed while the initial fetch is in-flight.
     const unsubscribe = window.api.onAgentEvent((payload: AgentEventPayload) => {
       const { event } = payload
 
       switch (event.type) {
         case 'agent:created':
-          setAgents((prev) => [...prev, event.data.agent])
+          setAgents((prev) =>
+            prev.some((a) => a.id === event.data.agent.id) ? prev : [...prev, event.data.agent]
+          )
           break
 
+        // state-changed delivers the full AgentStateSnapshot, covering phase
+        // transitions, step progress, errors, and done — making separate
+        // handlers for step-advanced/step-completed/error/done unnecessary.
         case 'agent:state-changed':
           setAgents((prev) =>
             prev.map((a) =>
@@ -60,56 +58,28 @@ function App(): React.JSX.Element {
           )
           break
 
-        case 'agent:step-advanced':
-        case 'agent:step-completed':
-          setAgents((prev) =>
-            prev.map((a) =>
-              a.id === event.data.agentId
-                ? {
-                    ...a,
-                    stateSnapshot: {
-                      ...a.stateSnapshot,
-                      phaseIndex: event.data.progress.phaseIndex,
-                      stepIndex: event.data.progress.stepIndex
-                    }
-                  }
-                : a
-            )
-          )
-          break
-
-        case 'agent:error':
-          setAgents((prev) =>
-            prev.map((a) =>
-              a.id === event.data.agentId
-                ? {
-                    ...a,
-                    stateSnapshot: {
-                      ...a.stateSnapshot,
-                      state: 'error',
-                      error: event.data.message
-                    }
-                  }
-                : a
-            )
-          )
-          break
-
-        case 'agent:done':
-          setAgents((prev) =>
-            prev.map((a) =>
-              a.id === event.data.agentId
-                ? { ...a, stateSnapshot: { ...a.stateSnapshot, state: 'done' } }
-                : a
-            )
-          )
-          break
-
         case 'agent:destroyed':
           setAgents((prev) => prev.filter((a) => a.id !== event.data.agentId))
           break
+
+        // step-advanced, step-completed, phase-completed, error, and done are
+        // already covered by the state-changed event which carries the full
+        // snapshot. No additional patching needed.
+        case 'agent:step-advanced':
+        case 'agent:step-completed':
+        case 'agent:phase-completed':
+        case 'agent:error':
+        case 'agent:done':
+          break
       }
     })
+
+    // Fetch initial agent list after subscribing. Any events that arrived
+    // between subscribe and fetch resolve are handled via dedup in agent:created.
+    window.api
+      .listAgents()
+      .then(setAgents)
+      .catch(() => setAgents([]))
 
     return unsubscribe
   }, [view])
