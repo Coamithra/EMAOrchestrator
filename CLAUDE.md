@@ -81,7 +81,8 @@ Central registry for all active agents. Ties together the Trello card, git workt
 - **`restoreAgent(persisted)`** — Restores an agent from persisted data. Reconstructs state machine via `AgentStateMachine.restore()`, reuses the original agent ID, skips worktree creation. Used on app startup.
 - **`destroyAgent(agentId, repoPath)`** — Removes the worktree, disconnects event forwarding, deletes from registry. Removes persisted state.
 - **`getAgent(agentId)`** / **`listAgents()`** — Returns `AgentSnapshot` objects with card info, worktree info, state machine snapshot, session ID, step history, and interruption status.
-- **`getStateMachine(agentId)`** — Exposes the state machine for the orchestration loop (#013) to drive.
+- **`getStateMachine(agentId)`** — Exposes the state machine for the orchestration loop to drive.
+- **`getRunbook(agentId)`** — Exposes the runbook for the orchestration loop to look up steps.
 - **`setSessionId(agentId, sessionId)`** — Links/unlinks a CLI session to an agent.
 - **`setStepSummary(agentId, phaseIndex, stepIndex, summary)`** — Sets a summary on a completed step record. Called by the orchestration loop.
 - **`setPendingHumanInteraction(agentId, interaction)`** — Sets or clears the pending human interaction. Called by the orchestration loop.
@@ -111,14 +112,32 @@ Manages active CliDriver instances and bridges their events to the renderer. One
 - **Event forwarding:** All CliDriver events are pushed to the renderer via `webContents.send('cli:event', payload)`. Payload shape: `{ sessionId, event: CliEvent }` (discriminated union).
 - Sessions auto-remove from the registry on completion or error.
 
+### Orchestration Loop (`src/main/orchestration-loop.ts`)
+
+Central controller that drives agents through runbook steps. One async loop per agent runs concurrently. Ties together AgentManager, AgentStateMachine, CliDriver, and PromptGenerator.
+
+- **`startAgent(agentId)`** — Starts the loop for an agent. Handles any starting state (idle, error, waiting_for_human, mid-phase). Transitions through picking_card → first phase automatically.
+- **`stopAgent(agentId)`** — Aborts the current CLI session and stops the loop.
+- **`respondToPermission(agentId, response)`** — Unblocks the CliDriver's pending permission and resumes the state machine from waiting_for_human.
+- **`respondToQuestion(agentId, response)`** — Unblocks the CliDriver's pending question and resumes the state machine.
+- **`isRunning(agentId)`** / **`abortAll()`** — Query and cleanup helpers.
+- **Step execution:** Each step creates a fresh CliDriver, generates a prompt via `generateStepPrompt()`, runs the session, extracts a summary from the last assistant message, calls `advanceStep()` (which auto-transitions phases), then sets the summary.
+- **Session resumption:** Steps within the same agent share an SDK session ID (per spike #009). The first step creates a new session; subsequent steps resume it.
+- **Permission/question flow:** CliDriver blocks internally (deferred promise). The loop sets `waiting_for_human` on the state machine and stores the pending interaction. When the user responds via IPC, the driver unblocks and the session continues. The `runStep()` Promise stays pending during pauses — no polling needed.
+- **Events:** Emits `agent:running`, `agent:paused`, `agent:completed`, `agent:errored`, `agent:stopped`.
+- **Renderer forwarding:** All CliDriver events are forwarded to the renderer via `cli:event` channel using session ID `orchestration-<agentId>`.
+- **Shared types:** `src/shared/orchestration-loop.ts` defines `OrchestrationLoopEvents`.
+- **IPC channels:** `orchestration:start`, `orchestration:stop`, `orchestration:respondPermission`, `orchestration:respondQuestion`, `orchestration:isRunning`.
+
 ### IPC Bridge (`src/shared/ipc.ts`)
 
 Central definition of all IPC channel constants and the renderer API type.
 
-- **`IpcChannels`** — String constants for all channels (config, dialog, CLI, worktree, agent persistence). Prevents typos and provides a single source of truth.
+- **`IpcChannels`** — String constants for all channels (config, dialog, CLI, worktree, agent persistence, orchestration). Prevents typos and provides a single source of truth.
 - **`CliEvent`** — Discriminated union of all CLI events pushed from main to renderer.
 - **`CliEventPayload`** — Wrapper with `sessionId` + `CliEvent` for the `cli:event` channel.
 - **`AgentAPI`** — TypeScript interface for the CLI/worktree portion of the preload API.
+- **`OrchestrationAPI`** — TypeScript interface for the orchestration loop portion of the preload API.
 
 ## Development Workflow
 

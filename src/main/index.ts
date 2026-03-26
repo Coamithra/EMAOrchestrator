@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers } from './ipc-handlers'
 import { abortAllSessions } from './session-registry'
 import { AgentManager } from './agent-manager'
+import { OrchestrationLoop } from './orchestration-loop'
 import {
   loadPersistedAgents,
   reconcileAgents,
@@ -14,6 +15,7 @@ import { loadConfig } from './config-service'
 import { cleanupOrphanedWorktrees } from './worktree-manager'
 
 const agentManager = new AgentManager()
+let orchestrationLoop: OrchestrationLoop | null = null
 
 function createWindow(): void {
   // Create the browser window.
@@ -105,7 +107,9 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerIpcHandlers(agentManager)
+  orchestrationLoop = new OrchestrationLoop(agentManager)
+
+  registerIpcHandlers(agentManager, orchestrationLoop)
 
   createWindow()
 
@@ -119,8 +123,9 @@ app.whenReady().then(async () => {
   await restorePersistedAgents()
 })
 
-// Abort all CLI sessions before quitting
+// Abort all CLI sessions and orchestration loops before quitting
 app.on('will-quit', () => {
+  orchestrationLoop?.abortAll()
   abortAllSessions()
 })
 

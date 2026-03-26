@@ -45,7 +45,14 @@ export const IpcChannels = {
   // Agent persistence
   AGENT_LIST: 'agent:list',
   AGENT_GET: 'agent:get',
-  AGENT_DISMISS: 'agent:dismiss'
+  AGENT_DISMISS: 'agent:dismiss',
+
+  // Orchestration loop
+  ORCHESTRATION_START: 'orchestration:start',
+  ORCHESTRATION_STOP: 'orchestration:stop',
+  ORCHESTRATION_RESPOND_PERMISSION: 'orchestration:respondPermission',
+  ORCHESTRATION_RESPOND_QUESTION: 'orchestration:respondQuestion',
+  ORCHESTRATION_IS_RUNNING: 'orchestration:isRunning'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -95,4 +102,13 @@ export interface PersistenceAPI {
   listAgents(): Promise<AgentSnapshot[]>
   getAgent(agentId: string): Promise<AgentSnapshot | null>
   dismissAgent(agentId: string): Promise<void>
+}
+
+/** Orchestration loop API exposed to the renderer. */
+export interface OrchestrationAPI {
+  startOrchestration(agentId: string): Promise<void>
+  stopOrchestration(agentId: string): Promise<void>
+  respondToOrchestrationPermission(agentId: string, response: PermissionResponse): Promise<void>
+  respondToOrchestrationQuestion(agentId: string, response: UserQuestionResponse): Promise<void>
+  isOrchestrationRunning(agentId: string): Promise<boolean>
 }

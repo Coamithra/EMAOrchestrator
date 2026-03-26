@@ -165,6 +165,11 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     return this.agents.get(agentId)?.stateMachine ?? null
   }
 
+  /** Get the runbook for an agent. Used by the orchestration loop. */
+  getRunbook(agentId: string): Runbook | null {
+    return this.agents.get(agentId)?.runbook ?? null
+  }
+
   /** Associate a CLI session ID with an agent. Set null to clear. */
   setSessionId(agentId: string, sessionId: string | null): void {
     const entry = this.agents.get(agentId)
@@ -188,10 +193,7 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
   }
 
   /** Set or clear the pending human interaction for an agent. */
-  setPendingHumanInteraction(
-    agentId: string,
-    interaction: PendingHumanInteraction | null
-  ): void {
+  setPendingHumanInteraction(agentId: string, interaction: PendingHumanInteraction | null): void {
     const entry = this.agents.get(agentId)
     if (!entry) throw new Error(`Unknown agent: ${agentId}`)
     entry.pendingHumanInteraction = interaction

@@ -9,6 +9,7 @@ import {
 } from './worktree-manager'
 import { removePersistedAgent } from './agent-persistence-service'
 import type { AgentManager } from './agent-manager'
+import type { OrchestrationLoop } from './orchestration-loop'
 import type { AppConfig } from '../shared/config'
 import type {
   CliSessionOptions,
@@ -18,7 +19,15 @@ import type {
 import type { WorktreeInfo } from '../shared/worktree'
 import { IpcChannels } from '../shared/ipc'
 
-export function registerIpcHandlers(agentManager: AgentManager): void {
+function requireOrchestration(loop: OrchestrationLoop | null): OrchestrationLoop {
+  if (!loop) throw new Error('Orchestration not available — app config not loaded')
+  return loop
+}
+
+export function registerIpcHandlers(
+  agentManager: AgentManager,
+  orchestrationLoop: OrchestrationLoop | null
+): void {
   // ---------------------------------------------------------------------------
   // Config
   // ---------------------------------------------------------------------------
@@ -147,6 +156,10 @@ export function registerIpcHandlers(agentManager: AgentManager): void {
   ipcMain.handle(IpcChannels.AGENT_DISMISS, async (_event, agentId: string) => {
     const agent = agentManager.getAgent(agentId)
     if (agent) {
+      // Stop orchestration if running
+      if (orchestrationLoop?.isRunning(agentId)) {
+        orchestrationLoop.stopAgent(agentId)
+      }
       const config = await loadConfig()
       if (config?.targetRepoPath) {
         await agentManager.destroyAgent(agentId, config.targetRepoPath)
@@ -155,5 +168,35 @@ export function registerIpcHandlers(agentManager: AgentManager): void {
     }
     // Agent not in memory (stale) — just remove from disk
     await removePersistedAgent(agentId)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Orchestration Loop
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IpcChannels.ORCHESTRATION_START, (_event, agentId: string) => {
+    requireOrchestration(orchestrationLoop).startAgent(agentId)
+  })
+
+  ipcMain.handle(IpcChannels.ORCHESTRATION_STOP, (_event, agentId: string) => {
+    requireOrchestration(orchestrationLoop).stopAgent(agentId)
+  })
+
+  ipcMain.handle(
+    IpcChannels.ORCHESTRATION_RESPOND_PERMISSION,
+    (_event, agentId: string, response: PermissionResponse) => {
+      requireOrchestration(orchestrationLoop).respondToPermission(agentId, response)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.ORCHESTRATION_RESPOND_QUESTION,
+    async (_event, agentId: string, response: UserQuestionResponse) => {
+      await requireOrchestration(orchestrationLoop).respondToQuestion(agentId, response)
+    }
+  )
+
+  ipcMain.handle(IpcChannels.ORCHESTRATION_IS_RUNNING, (_event, agentId: string) => {
+    return orchestrationLoop?.isRunning(agentId) ?? false
   })
 }

@@ -48,7 +48,19 @@ const api = {
   getAgent: (agentId: string): Promise<unknown> =>
     ipcRenderer.invoke(IpcChannels.AGENT_GET, agentId),
   dismissAgent: (agentId: string): Promise<void> =>
-    ipcRenderer.invoke(IpcChannels.AGENT_DISMISS, agentId)
+    ipcRenderer.invoke(IpcChannels.AGENT_DISMISS, agentId),
+
+  // Orchestration loop
+  startOrchestration: (agentId: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_START, agentId),
+  stopOrchestration: (agentId: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_STOP, agentId),
+  respondToOrchestrationPermission: (agentId: string, response: unknown): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_RESPOND_PERMISSION, agentId, response),
+  respondToOrchestrationQuestion: (agentId: string, response: unknown): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_RESPOND_QUESTION, agentId, response),
+  isOrchestrationRunning: (agentId: string): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_IS_RUNNING, agentId)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

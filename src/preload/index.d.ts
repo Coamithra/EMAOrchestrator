@@ -1,6 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { AppConfig, ValidationResult } from '../shared/config'
-import type { AgentAPI, PersistenceAPI } from '../shared/ipc'
+import type { AgentAPI, PersistenceAPI, OrchestrationAPI } from '../shared/ipc'
 
 interface ConfigAPI {
   loadConfig(): Promise<AppConfig | null>
@@ -14,6 +14,6 @@ interface ConfigAPI {
 declare global {
   interface Window {
     electron: ElectronAPI
-    api: ConfigAPI & AgentAPI & PersistenceAPI
+    api: ConfigAPI & AgentAPI & PersistenceAPI & OrchestrationAPI
   }
 }
