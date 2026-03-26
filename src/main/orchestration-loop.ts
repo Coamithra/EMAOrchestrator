@@ -2,6 +2,8 @@ import { BrowserWindow } from 'electron'
 import { CliDriver } from './cli-driver'
 import { generateStepPrompt } from './prompt-generator'
 import { TypedEventEmitter } from './typed-emitter'
+import { moveCard, addComment, getListIdByName } from './trello-service'
+import { loadConfig } from './config-service'
 import type { AgentManager } from './agent-manager'
 import type {
   SessionResult,
@@ -215,11 +217,16 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
     this.emit('agent:running', agentId)
 
+    // Move card to In Progress (fire-and-forget)
+    this.trelloMoveToInProgress(agentId).catch(() => {})
+
     // Step loop: run steps until done, error, or stopped
     while (!entry.stopped) {
       const state = sm.getState()
 
       if (state === 'done') {
+        // Move card to Done and post summary comment (fire-and-forget)
+        this.trelloCompleteCard(agentId).catch(() => {})
         this.emit('agent:completed', agentId)
         break
       }
@@ -436,6 +443,77 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       }
     }
     this.emit('agent:errored', agentId, message)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Trello integration (fire-and-forget, never blocks orchestration)
+  // ---------------------------------------------------------------------------
+
+  /** Move an agent's card to the In Progress list. */
+  private async trelloMoveToInProgress(agentId: string): Promise<void> {
+    const { cardId, creds, config } = await this.getTrelloContext(agentId)
+    if (!cardId || !creds || !config) return
+
+    const listId = await getListIdByName(
+      config.trelloBoardId,
+      config.trelloListNames.inProgress,
+      creds
+    )
+    if (listId) {
+      await moveCard(cardId, listId, creds)
+    }
+  }
+
+  /** Move an agent's card to Done and post a summary comment. */
+  private async trelloCompleteCard(agentId: string): Promise<void> {
+    const { cardId, creds, config } = await this.getTrelloContext(agentId)
+    if (!cardId || !creds || !config) return
+
+    const listId = await getListIdByName(config.trelloBoardId, config.trelloListNames.done, creds)
+    if (listId) {
+      await moveCard(cardId, listId, creds)
+    }
+
+    const agent = this.agentManager.getAgent(agentId)
+    if (!agent) return
+
+    const summaryLines = agent.stepHistory
+      .filter((s) => s.summary)
+      .map((s) => `- **Step ${s.phaseIndex + 1}.${s.stepIndex + 1}**: ${s.summary}`)
+
+    const comment = [
+      `**Agent completed: ${agent.card.name}**`,
+      '',
+      `Branch: \`${agent.worktree.branch}\``,
+      '',
+      '**Step summaries:**',
+      ...summaryLines
+    ].join('\n')
+
+    await addComment(cardId, comment, creds)
+  }
+
+  /** Load Trello credentials and card ID for an agent. Returns nulls if unavailable. */
+  private async getTrelloContext(agentId: string): Promise<{
+    cardId: string | null
+    creds: { apiKey: string; apiToken: string } | null
+    config: Awaited<ReturnType<typeof loadConfig>>
+  }> {
+    const config = await loadConfig()
+    if (!config?.trelloApiKey || !config?.trelloApiToken || !config?.trelloBoardId) {
+      return { cardId: null, creds: null, config: null }
+    }
+
+    const agent = this.agentManager.getAgent(agentId)
+    if (!agent) {
+      return { cardId: null, creds: null, config: null }
+    }
+
+    return {
+      cardId: agent.card.id,
+      creds: { apiKey: config.trelloApiKey, apiToken: config.trelloApiToken },
+      config
+    }
   }
 
   /** Forward CliDriver events to the renderer for live UI display. */

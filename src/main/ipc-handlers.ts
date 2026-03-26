@@ -8,6 +8,7 @@ import {
   cleanupOrphanedWorktrees
 } from './worktree-manager'
 import { removePersistedAgent } from './agent-persistence-service'
+import { getListsForBoard, getCardsFromList, getListIdByName } from './trello-service'
 import type { AgentManager } from './agent-manager'
 import type { OrchestrationLoop } from './orchestration-loop'
 import { DEFAULT_CONFIG, type AppConfig } from '../shared/config'
@@ -208,5 +209,27 @@ export function registerIpcHandlers(
         max: DEFAULT_CONFIG.maxConcurrentAgents
       }
     )
+  })
+
+  // ---------------------------------------------------------------------------
+  // Trello
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IpcChannels.TRELLO_GET_LISTS, async () => {
+    const config = await loadConfig()
+    if (!config?.trelloApiKey || !config?.trelloApiToken || !config?.trelloBoardId) return []
+    return await getListsForBoard(config.trelloBoardId, {
+      apiKey: config.trelloApiKey,
+      apiToken: config.trelloApiToken
+    })
+  })
+
+  ipcMain.handle(IpcChannels.TRELLO_GET_BACKLOG_CARDS, async () => {
+    const config = await loadConfig()
+    if (!config?.trelloApiKey || !config?.trelloApiToken || !config?.trelloBoardId) return []
+    const creds = { apiKey: config.trelloApiKey, apiToken: config.trelloApiToken }
+    const listId = await getListIdByName(config.trelloBoardId, config.trelloListNames.todo, creds)
+    if (!listId) return []
+    return await getCardsFromList(listId, creds)
   })
 }

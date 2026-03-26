@@ -13,6 +13,7 @@ import type {
 import type { WorktreeInfo } from './worktree'
 import type { AgentSnapshot } from './agent-manager'
 import type { ConcurrencyStatus } from './orchestration-loop'
+import type { TrelloCard, TrelloList } from './trello'
 
 // ---------------------------------------------------------------------------
 // IPC Channel Constants
@@ -54,7 +55,11 @@ export const IpcChannels = {
   ORCHESTRATION_RESPOND_PERMISSION: 'orchestration:respondPermission',
   ORCHESTRATION_RESPOND_QUESTION: 'orchestration:respondQuestion',
   ORCHESTRATION_IS_RUNNING: 'orchestration:isRunning',
-  ORCHESTRATION_GET_CONCURRENCY_STATUS: 'orchestration:getConcurrencyStatus'
+  ORCHESTRATION_GET_CONCURRENCY_STATUS: 'orchestration:getConcurrencyStatus',
+
+  // Trello
+  TRELLO_GET_LISTS: 'trello:getLists',
+  TRELLO_GET_BACKLOG_CARDS: 'trello:getBacklogCards'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -114,4 +119,10 @@ export interface OrchestrationAPI {
   respondToOrchestrationQuestion(agentId: string, response: UserQuestionResponse): Promise<void>
   isOrchestrationRunning(agentId: string): Promise<boolean>
   getConcurrencyStatus(): Promise<ConcurrencyStatus>
+}
+
+/** Trello API exposed to the renderer. */
+export interface TrelloAPI {
+  getTrelloLists(): Promise<TrelloList[]>
+  getTrelloBacklogCards(): Promise<TrelloCard[]>
 }

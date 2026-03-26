@@ -41,6 +41,19 @@ Wraps the Agent SDK's `query()` into an EventEmitter-based service. One `CliDriv
 - **Session resumption:** Pass a previous `sessionId` to `CliSessionOptions` to resume a conversation.
 - **Shared types:** `src/shared/cli-driver.ts` defines all event/state types for use across main process and renderer.
 
+### Trello Service (`src/main/trello-service.ts`)
+
+Stateless exported functions for Trello REST API operations. Uses native `fetch()` with 10-second timeouts. All functions degrade gracefully (return empty arrays or `false` on failure, never throw).
+
+- **`getListsForBoard(boardId, creds)`** — Fetches all open lists for a board.
+- **`getListIdByName(boardId, listName, creds)`** — Resolves a list name to its ID (case-insensitive).
+- **`getCardsFromList(listId, creds)`** — Fetches all open cards from a list.
+- **`moveCard(cardId, targetListId, creds)`** — Moves a card to a different list (PUT).
+- **`addComment(cardId, text, creds)`** — Posts a comment on a card (POST).
+- **Shared types:** `src/shared/trello.ts` defines `TrelloCredentials`, `TrelloList`, `TrelloCard`.
+- **Orchestration integration:** The orchestration loop calls `moveCard` (to In Progress on start, to Done on completion) and `addComment` (summary on completion) as fire-and-forget operations that never block agent work.
+- **IPC channels:** `trello:getLists`, `trello:getBacklogCards` — for the renderer to fetch board data.
+
 ### Worktree Manager (`src/main/worktree-manager.ts`)
 
 Wraps `git worktree` commands into an async service. Stateless exported functions (same pattern as config-service). One worktree per agent session, created as siblings to the main repo directory.

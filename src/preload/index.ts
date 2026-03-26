@@ -62,7 +62,12 @@ const api = {
   isOrchestrationRunning: (agentId: string): Promise<boolean> =>
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_IS_RUNNING, agentId),
   getConcurrencyStatus: (): Promise<unknown> =>
-    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_GET_CONCURRENCY_STATUS)
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_GET_CONCURRENCY_STATUS),
+
+  // Trello
+  getTrelloLists: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.TRELLO_GET_LISTS),
+  getTrelloBacklogCards: (): Promise<unknown> =>
+    ipcRenderer.invoke(IpcChannels.TRELLO_GET_BACKLOG_CARDS)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
