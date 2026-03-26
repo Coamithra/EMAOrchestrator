@@ -43,6 +43,10 @@ const api = {
   cleanupOrphanedWorktrees: (repoPath: string): Promise<unknown> =>
     ipcRenderer.invoke(IpcChannels.WORKTREE_CLEANUP_ORPHANS, repoPath),
 
+  // Agent creation
+  createAgent: (card: { id: string; name: string; description: string }): Promise<string> =>
+    ipcRenderer.invoke(IpcChannels.AGENT_CREATE, card),
+
   // Agent persistence
   listAgents: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.AGENT_LIST),
   getAgent: (agentId: string): Promise<unknown> =>

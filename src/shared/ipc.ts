@@ -61,6 +61,9 @@ export const IpcChannels = {
   // Agent events (main → renderer push)
   AGENT_EVENT: 'agent:event',
 
+  // Agent creation
+  AGENT_CREATE: 'agent:create',
+
   // Trello
   TRELLO_GET_LISTS: 'trello:getLists',
   TRELLO_GET_BACKLOG_CARDS: 'trello:getBacklogCards'
@@ -147,6 +150,11 @@ export interface OrchestrationAPI {
   respondToOrchestrationQuestion(agentId: string, response: UserQuestionResponse): Promise<void>
   isOrchestrationRunning(agentId: string): Promise<boolean>
   getConcurrencyStatus(): Promise<ConcurrencyStatus>
+}
+
+/** Agent creation API exposed to the renderer. */
+export interface AgentCreateAPI {
+  createAgent(card: { id: string; name: string; description: string }): Promise<string>
 }
 
 /** Trello API exposed to the renderer. */

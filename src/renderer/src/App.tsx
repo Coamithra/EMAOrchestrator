@@ -5,6 +5,7 @@ import type { AgentEventPayload } from '@shared/ipc'
 import TopBar from './components/TopBar'
 import Settings from './components/Settings'
 import MainLayout from './components/MainLayout'
+import NewAgentDialog from './components/NewAgentDialog'
 
 type View = 'loading' | 'settings' | 'main'
 
@@ -12,6 +13,7 @@ function App(): React.JSX.Element {
   const [view, setView] = useState<View>('loading')
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [agents, setAgents] = useState<AgentSnapshot[]>([])
+  const [showNewAgentDialog, setShowNewAgentDialog] = useState(false)
 
   useEffect(() => {
     window.api
@@ -76,8 +78,7 @@ function App(): React.JSX.Element {
               if (a.id !== agentId) return a
               // Avoid duplicates (idempotency for replayed events)
               const exists = a.stepHistory.some(
-                (r) =>
-                  r.phaseIndex === progress.phaseIndex && r.stepIndex === progress.stepIndex
+                (r) => r.phaseIndex === progress.phaseIndex && r.stepIndex === progress.stepIndex
               )
               if (exists) return a
               return {
@@ -124,7 +125,16 @@ function App(): React.JSX.Element {
   }
 
   const handleNewAgentClick = useCallback(() => {
-    // Will be wired to the new-agent launcher dialog (#020)
+    setShowNewAgentDialog(true)
+  }, [])
+
+  const handleAgentCreated = useCallback(async (agentId: string) => {
+    setShowNewAgentDialog(false)
+    try {
+      await window.api.startOrchestration(agentId)
+    } catch {
+      // Agent was created but start failed — it'll show as idle in the sidebar
+    }
   }, [])
 
   const handleSettingsClick = useCallback(() => setView('settings'), [])
@@ -148,6 +158,12 @@ function App(): React.JSX.Element {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <TopBar onNewAgentClick={handleNewAgentClick} onSettingsClick={handleSettingsClick} />
       <MainLayout agents={agents} />
+      {showNewAgentDialog && (
+        <NewAgentDialog
+          onCreated={handleAgentCreated}
+          onClose={() => setShowNewAgentDialog(false)}
+        />
+      )}
     </div>
   )
 }

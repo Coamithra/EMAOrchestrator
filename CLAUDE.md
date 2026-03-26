@@ -155,6 +155,7 @@ Central definition of all IPC channel constants and the renderer API type.
 - **`CliEvent`** — Discriminated union of all CLI events pushed from main to renderer.
 - **`CliEventPayload`** — Wrapper with `sessionId` + `CliEvent` for the `cli:event` channel.
 - **`AgentAPI`** — TypeScript interface for the CLI/worktree portion of the preload API.
+- **`AgentCreateAPI`** — TypeScript interface for agent creation from the renderer (`createAgent(card)`).
 - **`OrchestrationAPI`** — TypeScript interface for the orchestration loop portion of the preload API.
 
 ### Agent Detail Panel (`src/renderer/src/components/AgentDetailPanel.tsx`)
@@ -170,6 +171,15 @@ Main panel for viewing a selected agent's state and output. Composes two sub-com
 - **Sidebar notification:** A pulsing "!" badge appears on sidebar agent items when `stateSnapshot.state === 'waiting_for_human'`.
 - **`AgentSnapshot.runbook`:** The full `Runbook` is included in `AgentSnapshot` so the renderer has phase/step names without an extra IPC call.
 - **`pendingHumanInteraction` sync:** `App.tsx` clears `pendingHumanInteraction` to `null` on `agent:state-changed` events when the new state is not `waiting_for_human`, keeping the badge in sync without needing a separate event.
+
+### New Agent Dialog (`src/renderer/src/components/NewAgentDialog.tsx`)
+
+Modal dialog for launching a new agent from the UI. Triggered by the "+ New Agent" button in the TopBar.
+
+- **Card selection:** Fetches backlog cards via `getTrelloBacklogCards()` and displays them in a selectable list.
+- **Branch preview:** Shows auto-generated branch name (mirrors `AgentManager.branchNameFromCard` logic).
+- **Creation flow:** Calls `createAgent(card)` via IPC → main process parses runbook, creates worktree + state machine. Then auto-starts orchestration via `startOrchestration(agentId)`.
+- **IPC channel:** `agent:create` — handler in `ipc-handlers.ts` loads config, parses runbook, delegates to `agentManager.createAgent()`.
 
 ## Development Workflow
 

@@ -8,8 +8,10 @@ import {
   cleanupOrphanedWorktrees
 } from './worktree-manager'
 import { removePersistedAgent } from './agent-persistence-service'
+import { parseRunbookFile } from './runbook-parser'
 import { getListsForBoard, getCardsFromList, getListIdByName } from './trello-service'
 import type { AgentManager } from './agent-manager'
+import type { CardInfo } from '../shared/agent-manager'
 import type { OrchestrationLoop } from './orchestration-loop'
 import { DEFAULT_CONFIG, type AppConfig } from '../shared/config'
 import type {
@@ -169,6 +171,19 @@ export function registerIpcHandlers(
     }
     // Agent not in memory (stale) — just remove from disk
     await removePersistedAgent(agentId)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Agent Creation
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IpcChannels.AGENT_CREATE, async (_event, card: CardInfo) => {
+    const config = await loadConfig()
+    if (!config?.targetRepoPath || !config?.contributingMdPath) {
+      throw new Error('App not configured — set target repo and CONTRIBUTING.md path first')
+    }
+    const runbook = await parseRunbookFile(config.contributingMdPath)
+    return await agentManager.createAgent(card, runbook, config.targetRepoPath)
   })
 
   // ---------------------------------------------------------------------------
