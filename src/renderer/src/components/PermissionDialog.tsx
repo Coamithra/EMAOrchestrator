@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { PermissionRequest, PermissionResponse } from '@shared/cli-driver'
 import './PermissionDialog.css'
 
@@ -24,15 +24,29 @@ function PermissionDialog({ request, onRespond }: PermissionDialogProps): React.
     onRespond({ requestId: request.requestId, behavior: 'deny' })
   }, [request.requestId, onRespond])
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === 'Escape') handleDeny()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [handleDeny])
+
   return (
-    <div className="permission-dialog">
-      <div className="permission-dialog__card">
-        <div className="permission-dialog__header">
-          <span className="permission-dialog__icon">&#9888;</span>
-          <span className="permission-dialog__title">Permission Request</span>
+    <div
+      className="interaction-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Permission request"
+      onClick={handleDeny}
+    >
+      <div className="interaction-dialog__card" onClick={(e) => e.stopPropagation()}>
+        <div className="interaction-dialog__header">
+          <span className="interaction-dialog__icon permission-dialog__icon">{'\u26A0'}</span>
+          <span className="interaction-dialog__title">Permission Request</span>
         </div>
 
-        <div className="permission-dialog__body">
+        <div className="interaction-dialog__body">
           <div className="permission-dialog__field">
             <span className="permission-dialog__label">Tool</span>
             <span className="permission-dialog__value permission-dialog__tool-name">
@@ -49,21 +63,19 @@ function PermissionDialog({ request, onRespond }: PermissionDialogProps): React.
 
           <div className="permission-dialog__field permission-dialog__field--vertical">
             <span className="permission-dialog__label">Input</span>
-            <pre className="permission-dialog__input-json">
-              {formatToolInput(request.toolInput)}
-            </pre>
+            <pre className="permission-dialog__input-json">{formatToolInput(request.toolInput)}</pre>
           </div>
         </div>
 
-        <div className="permission-dialog__actions">
+        <div className="interaction-dialog__actions">
           <button
-            className="permission-dialog__btn permission-dialog__btn--deny"
+            className="interaction-dialog__btn interaction-dialog__btn--secondary"
             onClick={handleDeny}
           >
             Deny
           </button>
           <button
-            className="permission-dialog__btn permission-dialog__btn--allow"
+            className="interaction-dialog__btn interaction-dialog__btn--primary"
             onClick={handleAllow}
             autoFocus
           >

@@ -31,15 +31,30 @@ function QuestionDialog({ request, onRespond }: QuestionDialogProps): React.JSX.
     [handleSubmit]
   )
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === 'Escape') {
+        onRespond({ requestId: request.requestId, answer: '' })
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [request.requestId, onRespond])
+
   return (
-    <div className="question-dialog">
-      <div className="question-dialog__card">
-        <div className="question-dialog__header">
-          <span className="question-dialog__icon">&#10067;</span>
-          <span className="question-dialog__title">Question from Agent</span>
+    <div
+      className="interaction-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Question from agent"
+    >
+      <div className="interaction-dialog__card">
+        <div className="interaction-dialog__header">
+          <span className="interaction-dialog__icon question-dialog__icon">?</span>
+          <span className="interaction-dialog__title">Question from Agent</span>
         </div>
 
-        <div className="question-dialog__body">
+        <div className="interaction-dialog__body">
           <div className="question-dialog__question">{request.question}</div>
           <textarea
             ref={inputRef}
@@ -52,9 +67,9 @@ function QuestionDialog({ request, onRespond }: QuestionDialogProps): React.JSX.
           />
         </div>
 
-        <div className="question-dialog__actions">
+        <div className="interaction-dialog__actions">
           <button
-            className="question-dialog__btn"
+            className="interaction-dialog__btn interaction-dialog__btn--submit"
             onClick={handleSubmit}
             disabled={!answer.trim()}
           >

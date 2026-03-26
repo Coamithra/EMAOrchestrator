@@ -1,0 +1,93 @@
+/* Shared styles for PermissionDialog and QuestionDialog */
+
+.interaction-dialog {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 10;
+}
+
+.interaction-dialog__card {
+  background: var(--color-background-soft);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 8px;
+  width: 420px;
+  max-width: 90%;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.interaction-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.interaction-dialog__icon {
+  font-size: 16px;
+}
+
+.interaction-dialog__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ev-c-text-1);
+}
+
+.interaction-dialog__body {
+  padding: 14px 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.interaction-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ev-c-gray-3);
+}
+
+.interaction-dialog__btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+
+.interaction-dialog__btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.interaction-dialog__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.interaction-dialog__btn--primary {
+  background: #22c55e;
+  color: #fff;
+}
+
+.interaction-dialog__btn--secondary {
+  background: var(--ev-c-gray-2);
+  color: var(--ev-c-text-1);
+}
+
+.interaction-dialog__btn--submit {
+  background: #3b82f6;
+  color: #fff;
+  padding: 6px 20px;
+}

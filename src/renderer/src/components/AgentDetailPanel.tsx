@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { AgentSnapshot } from '@shared/agent-manager'
 import type { PermissionRequest, PermissionResponse, UserQuestionRequest, UserQuestionResponse } from '@shared/cli-driver'
 import type { CliEventPayload } from '@shared/ipc'
@@ -36,56 +36,62 @@ function getStateLabel(agent: AgentSnapshot): string {
 function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null)
   const [pendingQuestion, setPendingQuestion] = useState<UserQuestionRequest | null>(null)
+  const respondedRef = useRef(false)
 
-  // Subscribe to cli:event for real-time permission/question data
+  const agentId = agent?.id ?? null
+
+  // Subscribe to cli:event and clear state on agent switch (single effect)
   useEffect(() => {
-    if (!agent) return
+    setPendingPermission(null)
+    setPendingQuestion(null)
+    respondedRef.current = false
 
-    const sessionId = `orchestration-${agent.id}`
+    if (!agentId) return
+
+    const sessionId = `orchestration-${agentId}`
     const unsubscribe = window.api.onCliEvent((payload: CliEventPayload) => {
       if (payload.sessionId !== sessionId) return
 
       if (payload.event.type === 'permission:request') {
+        respondedRef.current = false
         setPendingPermission(payload.event.data)
         setPendingQuestion(null)
       } else if (payload.event.type === 'user:question') {
+        respondedRef.current = false
         setPendingQuestion(payload.event.data)
         setPendingPermission(null)
       }
     })
 
     return unsubscribe
-  }, [agent?.id])
+  }, [agentId])
 
   // Clear dialogs when agent exits waiting_for_human
   useEffect(() => {
-    if (!agent || agent.stateSnapshot.state === 'waiting_for_human') return
-    setPendingPermission(null)
-    setPendingQuestion(null)
+    if (agent && agent.stateSnapshot.state !== 'waiting_for_human') {
+      setPendingPermission(null)
+      setPendingQuestion(null)
+    }
   }, [agent?.stateSnapshot.state])
-
-  // Clear dialogs on agent switch
-  useEffect(() => {
-    setPendingPermission(null)
-    setPendingQuestion(null)
-  }, [agent?.id])
 
   const handlePermissionResponse = useCallback(
     (response: PermissionResponse) => {
-      if (!agent) return
-      window.api.respondToOrchestrationPermission(agent.id, response)
+      if (!agentId || respondedRef.current) return
+      respondedRef.current = true
+      window.api.respondToOrchestrationPermission(agentId, response)
       setPendingPermission(null)
     },
-    [agent?.id]
+    [agentId]
   )
 
   const handleQuestionResponse = useCallback(
     (response: UserQuestionResponse) => {
-      if (!agent) return
-      window.api.respondToOrchestrationQuestion(agent.id, response)
+      if (!agentId || respondedRef.current) return
+      respondedRef.current = true
+      window.api.respondToOrchestrationQuestion(agentId, response)
       setPendingQuestion(null)
     },
-    [agent?.id]
+    [agentId]
   )
 
   if (!agent) {
@@ -126,12 +132,14 @@ function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
           <TerminalView agentId={agent.id} />
           {pendingPermission && (
             <PermissionDialog
+              key={pendingPermission.requestId}
               request={pendingPermission}
               onRespond={handlePermissionResponse}
             />
           )}
           {pendingQuestion && (
             <QuestionDialog
+              key={pendingQuestion.requestId}
               request={pendingQuestion}
               onRespond={handleQuestionResponse}
             />
