@@ -1,0 +1,92 @@
+/** State of a CliDriver instance. */
+export type CliDriverState =
+  | 'idle'
+  | 'running'
+  | 'waiting_permission'
+  | 'waiting_user_input'
+  | 'completed'
+  | 'error'
+  | 'aborted'
+
+/** Configuration for starting a CLI session. */
+export interface CliSessionOptions {
+  prompt: string
+  cwd: string
+  allowedTools?: string[]
+  systemPrompt?: string
+  model?: string
+  maxTurns?: number
+  /** Pass a previous session ID to resume a conversation. */
+  sessionId?: string
+}
+
+/** Emitted when the SDK's canUseTool callback fires. */
+export interface PermissionRequest {
+  requestId: string
+  toolName: string
+  toolInput: Record<string, unknown>
+  toolUseId: string
+  title?: string
+  description?: string
+}
+
+/** Caller response to a PermissionRequest. */
+export interface PermissionResponse {
+  requestId: string
+  behavior: 'allow' | 'deny'
+  message?: string
+  updatedInput?: Record<string, unknown>
+}
+
+/** Emitted when Claude calls the AskUserQuestion tool. */
+export interface UserQuestionRequest {
+  requestId: string
+  question: string
+  toolUseId: string
+}
+
+/** Caller response to a UserQuestionRequest. */
+export interface UserQuestionResponse {
+  requestId: string
+  answer: string
+}
+
+/** Session metadata from the SDK system/init message. */
+export interface SessionInfo {
+  sessionId: string
+  model: string
+  tools: string[]
+}
+
+/** Final result when a session completes. */
+export interface SessionResult {
+  subtype: 'success' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd'
+  sessionId: string
+  result?: string
+  costUsd: number
+  numTurns: number
+  durationMs: number
+}
+
+/** A chunk of streaming text for display. */
+export interface StreamTextDelta {
+  text: string
+}
+
+/** Parsed content from a complete assistant message. */
+export interface AssistantContent {
+  text: string
+  toolUses: Array<{ toolName: string; input: Record<string, unknown> }>
+}
+
+/** Typed event map for the CliDriver. */
+export type CliDriverEvents = {
+  'state:changed': (state: CliDriverState, previousState: CliDriverState) => void
+  'session:init': (info: SessionInfo) => void
+  'stream:text': (delta: StreamTextDelta) => void
+  'assistant:message': (content: AssistantContent) => void
+  'permission:request': (request: PermissionRequest) => void
+  'user:question': (request: UserQuestionRequest) => void
+  'session:result': (result: SessionResult) => void
+  error: (error: Error) => void
+}
