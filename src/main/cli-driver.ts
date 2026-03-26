@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import type { UUID } from 'crypto'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { Query, PermissionResult, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { TypedEventEmitter } from './typed-emitter'
@@ -79,6 +80,8 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     } finally {
       this.queryHandle = null
       this.abortController = null
+      // Clean up any pending permissions that were orphaned (e.g., by abort)
+      this.pendingPermissions.clear()
     }
   }
 
@@ -98,12 +101,16 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
 
   /** Respond to an AskUserQuestion by sending a user message via streamInput. */
   async respondToUserQuestion(response: UserQuestionResponse): Promise<void> {
+    if ((this.state as CliDriverState) !== 'waiting_user_input') {
+      throw new Error(`Cannot respond to user question in state: ${this.state}`)
+    }
     if (!this.queryHandle) {
       throw new Error('No active session')
     }
 
     const userMessage = {
       type: 'user' as const,
+      uuid: randomUUID() as UUID,
       message: {
         role: 'user' as const,
         content: response.answer
@@ -248,7 +255,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     return async (
       toolName: string,
       input: Record<string, unknown>,
-      options: { toolUseID: string; title?: string; description?: string }
+      options: { signal: AbortSignal; toolUseID: string; title?: string; description?: string }
     ): Promise<PermissionResult> => {
       const requestId = randomUUID()
       const deferred = createDeferred<PermissionResult>()
@@ -266,11 +273,22 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
       }
       this.emit('permission:request', request)
 
-      // Block until respondToPermission() is called
+      // If the SDK aborts this tool call, auto-deny and clean up
+      const onAbort = (): void => {
+        if (this.pendingPermissions.has(requestId)) {
+          deferred.resolve({ behavior: 'deny', message: 'Aborted' })
+        }
+      }
+      options.signal.addEventListener('abort', onAbort, { once: true })
+
+      // Block until respondToPermission() is called or signal aborts
       const result = await deferred.promise
 
+      options.signal.removeEventListener('abort', onAbort)
       this.pendingPermissions.delete(requestId)
-      this.setState('running')
+      if ((this.state as CliDriverState) === 'waiting_permission') {
+        this.setState('running')
+      }
 
       return result
     }

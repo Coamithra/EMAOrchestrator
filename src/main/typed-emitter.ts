@@ -8,17 +8,17 @@ export class TypedEventEmitter<T extends EventMap> {
   private emitter = new EventEmitter()
 
   on<K extends keyof T & string>(event: K, listener: T[K]): this {
-this.emitter.on(event, listener)
+    this.emitter.on(event, listener)
     return this
   }
 
   off<K extends keyof T & string>(event: K, listener: T[K]): this {
-this.emitter.off(event, listener)
+    this.emitter.off(event, listener)
     return this
   }
 
   once<K extends keyof T & string>(event: K, listener: T[K]): this {
-this.emitter.once(event, listener)
+    this.emitter.once(event, listener)
     return this
   }
 

@@ -454,6 +454,79 @@ describe('CliDriver', () => {
 
       expect(states).toContain('waiting_user_input')
     })
+
+    it('respondToUserQuestion calls streamInput and resumes running', async () => {
+      const { query: mockQuery } = await import('@anthropic-ai/claude-agent-sdk')
+      const mockStreamInput = vi.fn()
+
+      // Use a deferred to pause the generator after askUserQuestion
+      let resumeGenerator!: () => void
+      const pausePromise = new Promise<void>((r) => {
+        resumeGenerator = r
+      })
+
+      vi.mocked(mockQuery).mockImplementationOnce(() => {
+        const gen = (async function* () {
+          yield systemInitMessage()
+          yield askUserQuestionMessage()
+          // Pause here — simulates SDK waiting for user response
+          await pausePromise
+          yield resultMessage()
+        })()
+        return Object.assign(gen, {
+          interrupt: vi.fn(),
+          close: vi.fn(),
+          streamInput: mockStreamInput,
+          setPermissionMode: vi.fn(),
+          setModel: vi.fn(),
+          setMaxThinkingTokens: vi.fn(),
+          initializationResult: vi.fn(),
+          supportedCommands: vi.fn(),
+          supportedModels: vi.fn(),
+          supportedAgents: vi.fn(),
+          mcpServerStatus: vi.fn(),
+          accountInfo: vi.fn(),
+          rewindFiles: vi.fn(),
+          seedReadState: vi.fn(),
+          reconnectMcpServer: vi.fn(),
+          toggleMcpServer: vi.fn(),
+          setMcpServers: vi.fn(),
+          stopTask: vi.fn(),
+          applyFlagSettings: vi.fn()
+        })
+      })
+
+      let questionRequestId = ''
+      driver.on('user:question', (q) => {
+        questionRequestId = q.requestId
+      })
+
+      const sessionPromise = driver.startSession({ prompt: 'Decide', cwd: '/test' })
+
+      // Wait a tick for the generator to yield the askUserQuestion message
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      expect(driver.getState()).toBe('waiting_user_input')
+
+      await driver.respondToUserQuestion({
+        requestId: questionRequestId,
+        answer: 'Option A'
+      })
+
+      expect(mockStreamInput).toHaveBeenCalledTimes(1)
+      expect(driver.getState()).toBe('running')
+
+      // Unblock the generator so session completes
+      resumeGenerator()
+      await sessionPromise
+    })
+
+    it('respondToUserQuestion throws if not in waiting_user_input state', async () => {
+      // Driver is idle — not in waiting_user_input
+      await expect(
+        driver.respondToUserQuestion({ requestId: 'any', answer: 'test' })
+      ).rejects.toThrow('Cannot respond to user question in state')
+    })
   })
 
   describe('abort', () => {
