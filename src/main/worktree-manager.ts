@@ -95,28 +95,36 @@ export async function createWorktree(repoPath: string, branch: string): Promise<
   return { path: worktreePath, branch, isMain: false }
 }
 
-/** Remove a worktree and delete its branch. */
-export async function removeWorktree(repoPath: string, branch: string): Promise<void> {
-  const parentDir = dirname(repoPath)
-  const worktreePath = resolve(join(parentDir, branch))
-
-  // Remove the worktree (--force in case of uncommitted changes from a crash)
-  await execFileAsync('git', ['worktree', 'remove', worktreePath, '--force'], {
-    cwd: repoPath
-  })
+/**
+ * Remove a worktree and delete its branch.
+ *
+ * Accepts worktree info directly to avoid recomputing paths from branch names,
+ * which would break for detached HEAD worktrees (empty branch).
+ */
+export async function removeWorktree(repoPath: string, worktree: WorktreeInfo): Promise<void> {
+  // Try to remove the worktree directory; if it's already gone, prune handles it
+  try {
+    await execFileAsync('git', ['worktree', 'remove', worktree.path, '--force'], {
+      cwd: repoPath
+    })
+  } catch {
+    // Directory may already be deleted (crash cleanup) — prune will clean up metadata
+  }
 
   // Clean up stale worktree references
   await execFileAsync('git', ['worktree', 'prune'], {
     cwd: repoPath
   })
 
-  // Delete the branch
-  try {
-    await execFileAsync('git', ['branch', '-D', branch], {
-      cwd: repoPath
-    })
-  } catch {
-    // Branch may already be deleted or may be the current branch — ignore
+  // Delete the branch (skip if detached HEAD / empty branch)
+  if (worktree.branch) {
+    try {
+      await execFileAsync('git', ['branch', '-D', worktree.branch], {
+        cwd: repoPath
+      })
+    } catch {
+      // Branch may already be deleted — ignore
+    }
   }
 }
 
@@ -134,7 +142,7 @@ export async function cleanupOrphanedWorktrees(repoPath: string): Promise<Worktr
   const orphans = await getOrphanedWorktrees(repoPath)
 
   for (const orphan of orphans) {
-    await removeWorktree(repoPath, orphan.branch)
+    await removeWorktree(repoPath, orphan)
   }
 
   return orphans

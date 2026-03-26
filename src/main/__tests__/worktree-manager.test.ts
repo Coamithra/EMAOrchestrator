@@ -167,16 +167,18 @@ describe('createWorktree', () => {
 // ── removeWorktree ──────────────────────────────────────────────────────
 
 describe('removeWorktree', () => {
+  const worktree = { path: 'C:/Proj/feat/old', branch: 'feat/old', isMain: false }
+
   it('removes worktree, prunes, and deletes branch', async () => {
     mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree remove
     mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree prune
     mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // branch -D
 
-    await removeWorktree('C:/Proj/main', 'feat/old')
+    await removeWorktree('C:/Proj/main', worktree)
 
     expect(mockExecFile).toHaveBeenCalledWith(
       'git',
-      ['worktree', 'remove', expect.stringContaining('feat'), '--force'],
+      ['worktree', 'remove', 'C:/Proj/feat/old', '--force'],
       { cwd: 'C:/Proj/main' }
     )
     expect(mockExecFile).toHaveBeenCalledWith('git', ['worktree', 'prune'], { cwd: 'C:/Proj/main' })
@@ -185,13 +187,33 @@ describe('removeWorktree', () => {
     })
   })
 
+  it('does not throw if worktree remove fails (directory already gone)', async () => {
+    mockExecFile.mockRejectedValueOnce(new Error('not a working tree')) // worktree remove fails
+    mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree prune
+    mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // branch -D
+
+    // Should not throw — prune cleans up metadata
+    await removeWorktree('C:/Proj/main', worktree)
+    expect(mockExecFile).toHaveBeenCalledWith('git', ['worktree', 'prune'], { cwd: 'C:/Proj/main' })
+  })
+
   it('does not throw if branch deletion fails', async () => {
     mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree remove
     mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree prune
     mockExecFile.mockRejectedValueOnce(new Error('branch not found')) // branch -D fails
 
-    // Should not throw
-    await removeWorktree('C:/Proj/main', 'feat/gone')
+    await removeWorktree('C:/Proj/main', worktree)
+  })
+
+  it('skips branch deletion for detached HEAD worktrees', async () => {
+    const detached = { path: 'C:/Proj/detached', branch: '', isMain: false }
+    mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree remove
+    mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree prune
+
+    await removeWorktree('C:/Proj/main', detached)
+
+    // Only 2 calls: worktree remove + prune. No branch -D call.
+    expect(mockExecFile).toHaveBeenCalledTimes(2)
   })
 })
 
