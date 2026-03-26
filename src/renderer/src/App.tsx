@@ -48,6 +48,8 @@ function App(): React.JSX.Element {
     // Will be wired to the new-agent launcher dialog (#020)
   }, [])
 
+  const handleSettingsClick = useCallback(() => setView('settings'), [])
+
   if (view === 'loading') {
     return <div style={{ padding: '2rem', color: 'var(--ev-c-text-2)' }}>Loading...</div>
   }
@@ -65,7 +67,7 @@ function App(): React.JSX.Element {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <TopBar onNewAgentClick={handleNewAgentClick} onSettingsClick={() => setView('settings')} />
+      <TopBar onNewAgentClick={handleNewAgentClick} onSettingsClick={handleSettingsClick} />
       <MainLayout agents={agents} />
     </div>
   )

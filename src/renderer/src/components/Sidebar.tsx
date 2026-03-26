@@ -12,6 +12,7 @@ function getStatusClass(state: AgentState): string {
   if (state === 'done') return 'sidebar__status-dot--done'
   if (state === 'error') return 'sidebar__status-dot--error'
   if (state === 'waiting_for_human') return 'sidebar__status-dot--waiting'
+  if (state === 'idle' || state === 'picking_card') return 'sidebar__status-dot--idle'
   return 'sidebar__status-dot--running'
 }
 
@@ -31,12 +32,21 @@ function Sidebar({ agents, selectedAgentId, onSelectAgent }: SidebarProps): Reac
       {agents.length === 0 ? (
         <div className="sidebar__empty">No agents running</div>
       ) : (
-        <ul className="sidebar__list">
+        <ul className="sidebar__list" role="listbox">
           {agents.map((agent) => (
             <li
               key={agent.id}
+              role="option"
+              aria-selected={agent.id === selectedAgentId}
+              tabIndex={0}
               className={`sidebar__item${agent.id === selectedAgentId ? ' sidebar__item--selected' : ''}`}
               onClick={() => onSelectAgent(agent.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSelectAgent(agent.id)
+                }
+              }}
             >
               <span
                 className={`sidebar__status-dot ${getStatusClass(agent.stateSnapshot.state)}`}

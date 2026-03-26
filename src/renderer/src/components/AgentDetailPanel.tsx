@@ -8,8 +8,8 @@ interface AgentDetailPanelProps {
 function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
   if (!agent) {
     return (
-      <div className="detail-panel">
-        <div className="detail-panel__empty">Select an agent to view details</div>
+      <div className="agent-detail-panel">
+        <div className="agent-detail-panel__empty">Select an agent to view details</div>
       </div>
     )
   }
@@ -21,12 +21,12 @@ function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
       : String(stateSnapshot.state)
 
   return (
-    <div className="detail-panel">
-      <div className="detail-panel__header">
-        <div className="detail-panel__card-name">{agent.card.name}</div>
-        <div className="detail-panel__state">{stateLabel}</div>
+    <div className="agent-detail-panel">
+      <div className="agent-detail-panel__header">
+        <div className="agent-detail-panel__card-name">{agent.card.name}</div>
+        <div className="agent-detail-panel__state">{stateLabel}</div>
       </div>
-      <div className="detail-panel__body">
+      <div className="agent-detail-panel__body">
         Terminal and progress views will be added by cards #017–#018
       </div>
     </div>
