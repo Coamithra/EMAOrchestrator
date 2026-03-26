@@ -99,7 +99,7 @@ Dig into the problem before proposing solutions. Use `/research` for topics that
 
 20. **Update CLAUDE.md** — If the change introduces new conventions, gotchas, or modifies documented behavior, update `CLAUDE.md` before committing (project rule)
 21. **Commit & push** — Descriptive message, reference the card number if useful. Push to the feature branch
-22. **Peer review** — Spawn a fresh agent to review the branch diff (`git diff main...<branch>`). The agent has no prior context, so it catches things we've gone blind to: logic errors, missed edge cases, convention violations, naming issues. Act on any valid feedback before proceeding
+22. **Peer review** — Spawn a fresh agent to review the branch diff (`git diff main...<branch>`). The agent has no prior context, so it catches things we've gone blind to: logic errors, missed edge cases, convention violations, naming issues. Fix all findings — even minor ones — unless the fix would be a major undertaking (in which case, note it as a follow-up). Act on all feedback before proceeding
 23. **Pull main into the branch** — `git pull origin main` into the feature branch to pick up any changes that landed while we worked. Resolve conflicts if any — see **Merge Conflict Rules** below
 24. **Re-run smoke tests** — Make sure the merge didn't break anything: `npm run build`
 25. **Return to the main checkout** — `cd` back to the `main/` directory. All remaining steps run from here, not from inside the worktree
