@@ -10,6 +10,7 @@ import {
 import { removePersistedAgent } from './agent-persistence-service'
 import { parseRunbookFile } from './runbook-parser'
 import { getListsForBoard, getCardsFromList, getListIdByName } from './trello-service'
+import { readAgentLog } from './logging-service'
 import type { AgentManager } from './agent-manager'
 import type { CardInfo } from '../shared/agent-manager'
 import type { OrchestrationLoop } from './orchestration-loop'
@@ -246,5 +247,13 @@ export function registerIpcHandlers(
     const listId = await getListIdByName(config.trelloBoardId, config.trelloListNames.todo, creds)
     if (!listId) return []
     return await getCardsFromList(listId, creds)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Logging
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IpcChannels.LOGGING_GET_LOG, async (_event, agentId: string) => {
+    return await readAgentLog(agentId)
   })
 }

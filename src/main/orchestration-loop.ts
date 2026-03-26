@@ -4,6 +4,7 @@ import { generateStepPrompt } from './prompt-generator'
 import { TypedEventEmitter } from './typed-emitter'
 import { moveCard, addComment, getListIdByName } from './trello-service'
 import { loadConfig } from './config-service'
+import { appendLogEntry } from './logging-service'
 import type { AgentManager } from './agent-manager'
 import type {
   SessionResult,
@@ -13,6 +14,7 @@ import type {
 } from '../shared/cli-driver'
 import type { CliEventPayload } from '../shared/ipc'
 import type { OrchestrationLoopEvents, ConcurrencyStatus } from '../shared/orchestration-loop'
+import type { LogEntry } from '../shared/logging'
 
 interface RunningAgent {
   agentId: string
@@ -29,6 +31,8 @@ interface RunningAgent {
   stuckNotified: boolean
   /** Interval timer for stuck-agent checks. */
   stuckCheckInterval: ReturnType<typeof setInterval> | null
+  /** Timestamp (ms) when the current step started. Used for step timing logs. */
+  stepStartedAt: number
 }
 
 /**
@@ -98,6 +102,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.running.delete(agentId)
     this.agentManager.setSessionId(agentId, null)
     this.agentManager.setPendingHumanInteraction(agentId, null)
+    this.log(agentId, { event: 'agent_stopped' })
     this.emit('agent:stopped', agentId)
     this.tryDequeue()
   }
@@ -192,7 +197,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       stopped: false,
       lastActivityAt: Date.now(),
       stuckNotified: false,
-      stuckCheckInterval: null
+      stuckCheckInterval: null,
+      stepStartedAt: 0
     }
     this.running.set(agentId, entry)
 
@@ -227,6 +233,26 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     }
   }
 
+  /** Distributive Omit that preserves union members. */
+  /** Fire-and-forget log helper. Looks up agent card name automatically. */
+  private log(
+    agentId: string,
+    fields: LogEntry extends infer E
+      ? E extends LogEntry
+        ? Omit<E, 'timestamp' | 'agentId' | 'cardName'>
+        : never
+      : never
+  ): void {
+    const agent = this.agentManager.getAgent(agentId)
+    const cardName = agent?.card.name ?? 'unknown'
+    appendLogEntry({
+      timestamp: new Date().toISOString(),
+      agentId,
+      cardName,
+      ...fields
+    } as LogEntry)
+  }
+
   private async runAgentLoop(entry: RunningAgent): Promise<void> {
     const { agentId } = entry
     const sm = this.agentManager.getStateMachine(agentId)
@@ -236,6 +262,16 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.enterPhaseState(agentId)
 
     this.emit('agent:running', agentId)
+
+    const agent = this.agentManager.getAgent(agentId)
+    if (agent) {
+      this.log(agentId, {
+        event: 'agent_started',
+        branch: agent.worktree.branch,
+        worktreePath: agent.worktree.path
+      })
+    }
+    const agentLoopStartedAt = Date.now()
 
     // Move card to In Progress (fire-and-forget)
     this.trelloMoveToInProgress(agentId).catch(() => {})
@@ -247,11 +283,24 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       if (state === 'done') {
         // Move card to Done and post summary comment (fire-and-forget)
         this.trelloCompleteCard(agentId).catch(() => {})
+        const agentSnapshot = this.agentManager.getAgent(agentId)
+        this.log(agentId, {
+          event: 'agent_completed',
+          totalDurationMs: Date.now() - agentLoopStartedAt,
+          stepsCompleted: agentSnapshot?.stepHistory.length ?? 0
+        })
         this.emit('agent:completed', agentId)
         break
       }
       if (state === 'error') {
-        this.emit('agent:errored', agentId, sm.getSnapshot().error ?? 'Unknown error')
+        const snap = sm.getSnapshot()
+        this.log(agentId, {
+          event: 'agent_error',
+          error: snap.error ?? 'Unknown error',
+          phaseIndex: snap.phaseIndex,
+          stepIndex: snap.stepIndex
+        })
+        this.emit('agent:errored', agentId, snap.error ?? 'Unknown error')
         break
       }
 
@@ -279,10 +328,33 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         totalStepsInPhase: phase.steps.length
       })
 
+      this.log(agentId, {
+        event: 'prompt_sent',
+        phaseIndex: snapshot.phaseIndex,
+        stepIndex: snapshot.stepIndex,
+        phaseName: phase.name,
+        stepTitle: step.title,
+        prompt
+      })
+
+      entry.stepStartedAt = Date.now()
       const ok = await this.runStep(entry, prompt)
       if (entry.stopped) break
 
-      if (!ok) break // error already set on state machine
+      const stepDurationMs = Date.now() - entry.stepStartedAt
+
+      if (!ok) {
+        this.log(agentId, {
+          event: 'step_error',
+          phaseIndex: snapshot.phaseIndex,
+          stepIndex: snapshot.stepIndex,
+          phaseName: phase.name,
+          stepTitle: step.title,
+          durationMs: stepDurationMs,
+          error: sm.getSnapshot().error ?? 'Unknown error'
+        })
+        break
+      }
 
       // Advance — handles phase transitions and done automatically.
       // advanceStep() creates the step history record via step:completed event.
@@ -293,6 +365,16 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       // Set summary after advance (history record now exists)
       const summary = entry.lastAssistantText.slice(-500) || 'Step completed.'
       this.agentManager.setStepSummary(agentId, completedPhaseIndex, completedStepIndex, summary)
+
+      this.log(agentId, {
+        event: 'step_completed',
+        phaseIndex: completedPhaseIndex,
+        stepIndex: completedStepIndex,
+        phaseName: phase.name,
+        stepTitle: step.title,
+        durationMs: stepDurationMs,
+        summary
+      })
     }
 
     // Normal-path cleanup. The .finally() in launchAgent() is a safety net for
@@ -399,6 +481,14 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       driver.on('assistant:message', (content: AssistantContent) => {
         if (content.text) {
           entry.lastAssistantText = content.text
+          const sm = this.agentManager.getStateMachine(agentId)
+          const snap = sm?.getSnapshot()
+          this.log(agentId, {
+            event: 'response_received',
+            phaseIndex: snap?.phaseIndex ?? -1,
+            stepIndex: snap?.stepIndex ?? -1,
+            text: content.text.slice(-2000)
+          })
         }
         resetActivity()
       })
@@ -408,6 +498,14 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         if (sm && sm.getState() !== 'waiting_for_human') {
           sm.setWaitingForHuman()
         }
+        const snap = sm?.getSnapshot()
+        this.log(agentId, {
+          event: 'permission_requested',
+          phaseIndex: snap?.phaseIndex ?? -1,
+          stepIndex: snap?.stepIndex ?? -1,
+          toolName: request.toolName,
+          detail: `${request.toolName}: ${request.title ?? request.description ?? ''}`
+        })
         this.agentManager.setPendingHumanInteraction(agentId, {
           type: 'permission',
           detail: `${request.toolName}: ${request.title ?? request.description ?? ''}`,
@@ -420,6 +518,13 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         if (sm && sm.getState() !== 'waiting_for_human') {
           sm.setWaitingForHuman()
         }
+        const snap = sm?.getSnapshot()
+        this.log(agentId, {
+          event: 'question_asked',
+          phaseIndex: snap?.phaseIndex ?? -1,
+          stepIndex: snap?.stepIndex ?? -1,
+          question: request.question
+        })
         this.agentManager.setPendingHumanInteraction(agentId, {
           type: 'question',
           detail: request.question,

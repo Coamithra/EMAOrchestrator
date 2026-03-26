@@ -5,7 +5,8 @@ import type {
   AgentCreateAPI,
   PersistenceAPI,
   OrchestrationAPI,
-  TrelloAPI
+  TrelloAPI,
+  LoggingAPI
 } from '../shared/ipc'
 
 interface ConfigAPI {
@@ -20,6 +21,6 @@ interface ConfigAPI {
 declare global {
   interface Window {
     electron: ElectronAPI
-    api: ConfigAPI & AgentAPI & AgentCreateAPI & PersistenceAPI & OrchestrationAPI & TrelloAPI
+    api: ConfigAPI & AgentAPI & AgentCreateAPI & PersistenceAPI & OrchestrationAPI & TrelloAPI & LoggingAPI
   }
 }

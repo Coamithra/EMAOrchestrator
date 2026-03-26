@@ -76,7 +76,11 @@ const api = {
   // Trello
   getTrelloLists: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.TRELLO_GET_LISTS),
   getTrelloBacklogCards: (): Promise<unknown> =>
-    ipcRenderer.invoke(IpcChannels.TRELLO_GET_BACKLOG_CARDS)
+    ipcRenderer.invoke(IpcChannels.TRELLO_GET_BACKLOG_CARDS),
+
+  // Logging
+  getAgentLog: (agentId: string): Promise<unknown> =>
+    ipcRenderer.invoke(IpcChannels.LOGGING_GET_LOG, agentId)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

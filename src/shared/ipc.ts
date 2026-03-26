@@ -15,6 +15,7 @@ import type { AgentSnapshot } from './agent-manager'
 import type { ConcurrencyStatus } from './orchestration-loop'
 import type { TrelloCard, TrelloList } from './trello'
 import type { AgentStateSnapshot, AgentStepProgress } from './agent-state'
+import type { LogEntry } from './logging'
 
 // ---------------------------------------------------------------------------
 // IPC Channel Constants
@@ -66,7 +67,10 @@ export const IpcChannels = {
 
   // Trello
   TRELLO_GET_LISTS: 'trello:getLists',
-  TRELLO_GET_BACKLOG_CARDS: 'trello:getBacklogCards'
+  TRELLO_GET_BACKLOG_CARDS: 'trello:getBacklogCards',
+
+  // Logging
+  LOGGING_GET_LOG: 'logging:getLog'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -161,4 +165,9 @@ export interface AgentCreateAPI {
 export interface TrelloAPI {
   getTrelloLists(): Promise<TrelloList[]>
   getTrelloBacklogCards(): Promise<TrelloCard[]>
+}
+
+/** Logging API exposed to the renderer. */
+export interface LoggingAPI {
+  getAgentLog(agentId: string): Promise<LogEntry[]>
 }

@@ -115,6 +115,18 @@ Persists agent state to `app.getPath('userData')/agents.json` so agents survive 
 - **Save triggers:** `AgentManager` auto-saves on every `state:changed` and `step:completed` event (fire-and-forget).
 - **Shared types:** `src/shared/agent-persistence.ts` defines `PersistedAgent`, `PersistedAgentStore`, `StepCompletionRecord`, `PendingHumanInteraction`, `ReconciliationResult`.
 
+### Logging Service (`src/main/logging-service.ts`)
+
+Per-agent structured logging to JSONL files. Stateless exported functions (same pattern as config-service). Logs stored at `app.getPath('userData')/logs/<agentId>.jsonl`.
+
+- **`appendLogEntry(entry)`** — Appends a JSON line to an agent's log file. Creates the logs directory on first write. Fire-and-forget safe (catches and console.errors on failure).
+- **`readAgentLog(agentId)`** — Reads and parses all log entries for an agent. Returns empty array on missing/unreadable file.
+- **`getLogPath(agentId)`** — Returns the file path for an agent's log.
+- **Log entry types:** `agent_started`, `prompt_sent`, `response_received`, `step_completed`, `step_error`, `permission_requested`, `question_asked`, `agent_completed`, `agent_error`, `agent_stopped`. All entries include timestamp, agentId, cardName.
+- **Integration:** The orchestration loop calls `appendLogEntry()` at each lifecycle point (step start/end, errors, permissions, questions). Logging never blocks orchestration.
+- **Shared types:** `src/shared/logging.ts` defines `LogEntry` (discriminated union) and all entry-specific interfaces.
+- **IPC channel:** `logging:getLog` — renderer can fetch an agent's full log via `window.api.getAgentLog(agentId)`.
+
 ### Session Registry (`src/main/session-registry.ts`)
 
 Manages active CliDriver instances and bridges their events to the renderer. One registry for the app.
