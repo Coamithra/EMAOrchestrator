@@ -146,7 +146,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
   /** Update the max concurrent agents limit. Does not kill running agents. */
   setMaxConcurrentAgents(max: number): void {
-    this.maxConcurrentAgents = max
+    this.maxConcurrentAgents = Math.max(1, Math.floor(max))
     // If the new limit is higher, try to dequeue waiting agents
     this.tryDequeue()
   }
@@ -177,18 +177,29 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     }
     this.running.set(agentId, entry)
 
-    this.runAgentLoop(entry).catch((err) => {
-      console.error(`Orchestration loop error for agent ${agentId}:`, err)
-      this.handleAgentError(agentId, err instanceof Error ? err.message : String(err))
-    })
+    this.runAgentLoop(entry)
+      .catch((err) => {
+        console.error(`Orchestration loop error for agent ${agentId}:`, err)
+        this.handleAgentError(agentId, err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        // Ensure the running slot is always freed, even on unexpected throws
+        this.running.delete(agentId)
+        this.agentManager.setSessionId(agentId, null)
+        this.tryDequeue()
+      })
   }
 
   /** Start the next queued agent if a slot is available. */
   private tryDequeue(): void {
     while (this.queued.length > 0 && this.running.size < this.maxConcurrentAgents) {
       const nextId = this.queued.shift()!
-      // Agent may have been destroyed while queued
-      if (!this.agentManager.getAgent(nextId)) continue
+      // Agent may have been destroyed while queued — emit stopped so the UI
+      // gets a terminal event for the agent it previously received queued for.
+      if (!this.agentManager.getAgent(nextId)) {
+        this.emit('agent:stopped', nextId)
+        continue
+      }
       this.emit('agent:dequeued', nextId)
       this.launchAgent(nextId)
     }
@@ -257,6 +268,9 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       this.agentManager.setStepSummary(agentId, completedPhaseIndex, completedStepIndex, summary)
     }
 
+    // Normal-path cleanup. The .finally() in launchAgent() is a safety net for
+    // unexpected throws — running.delete/tryDequeue are idempotent, so the
+    // duplicate call is harmless.
     this.running.delete(agentId)
     this.agentManager.setSessionId(agentId, null)
     this.tryDequeue()

@@ -10,7 +10,7 @@ import {
 import { removePersistedAgent } from './agent-persistence-service'
 import type { AgentManager } from './agent-manager'
 import type { OrchestrationLoop } from './orchestration-loop'
-import type { AppConfig } from '../shared/config'
+import { DEFAULT_CONFIG, type AppConfig } from '../shared/config'
 import type {
   CliSessionOptions,
   PermissionResponse,
@@ -202,7 +202,11 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IpcChannels.ORCHESTRATION_GET_CONCURRENCY_STATUS, () => {
     return (
-      orchestrationLoop?.getConcurrencyStatus() ?? { running: 0, queued: 0, max: 3 }
+      orchestrationLoop?.getConcurrencyStatus() ?? {
+        running: 0,
+        queued: 0,
+        max: DEFAULT_CONFIG.maxConcurrentAgents
+      }
     )
   })
 }

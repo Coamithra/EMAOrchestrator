@@ -549,5 +549,68 @@ describe('OrchestrationLoop', () => {
       expect(dequeuedEvents).toEqual([agentIds[1]])
       expect(loop.isQueued(agentIds[1])).toBe(false)
     })
+
+    it('dequeues when a running agent errors', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(2)
+      const loop = new OrchestrationLoop(manager, 1)
+
+      // First call (agent 0's first step) errors; subsequent calls hang
+      let callCount = 0
+      mockStartSession.mockImplementation(function (this: {
+        emit: (event: string, ...args: unknown[]) => void
+      }) {
+        callCount++
+        if (callCount === 1) {
+          this.emit('error', new Error('SDK crash'))
+          return Promise.resolve()
+        }
+        return new Promise(() => {})
+      })
+
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1])
+      expect(loop.isQueued(agentIds[1])).toBe(true)
+
+      // Wait for agent 1 to be dequeued (triggered after agent 0's error
+      // propagates through the loop and cleanup frees the slot)
+      const dequeuedId = await new Promise<string>((resolve) => {
+        loop.on('agent:dequeued', (id) => resolve(id))
+      })
+
+      expect(dequeuedId).toBe(agentIds[1])
+      expect(loop.isQueued(agentIds[1])).toBe(false)
+    })
+
+    it('decreasing max does not kill running agents', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(3)
+      const loop = new OrchestrationLoop(manager, 3)
+
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1])
+      loop.startAgent(agentIds[2])
+
+      expect(loop.getConcurrencyStatus()).toEqual({ running: 3, queued: 0, max: 3 })
+
+      loop.setMaxConcurrentAgents(1)
+
+      // All 3 should still be running — we don't kill agents
+      expect(loop.getConcurrencyStatus()).toEqual({ running: 3, queued: 0, max: 1 })
+      expect(loop.isRunning(agentIds[0])).toBe(true)
+      expect(loop.isRunning(agentIds[1])).toBe(true)
+      expect(loop.isRunning(agentIds[2])).toBe(true)
+    })
+
+    it('clamps max to at least 1', () => {
+      const manager = new AgentManager()
+      const loop = new OrchestrationLoop(manager, 5)
+
+      loop.setMaxConcurrentAgents(0)
+      expect(loop.getConcurrencyStatus().max).toBe(1)
+
+      loop.setMaxConcurrentAgents(-5)
+      expect(loop.getConcurrencyStatus().max).toBe(1)
+    })
   })
 })
