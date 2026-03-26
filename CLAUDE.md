@@ -73,6 +73,18 @@ Tracks a single agent's lifecycle as it works through a parsed runbook. Higher-l
 - **Events:** Emits `state:changed`, `step:advanced`, `step:completed`, `phase:completed`, `error`.
 - **Shared types:** `src/shared/agent-state.ts` defines `AgentState`, `AgentStateSnapshot`, `AgentStepProgress`, and event types.
 
+### Agent Manager (`src/main/agent-manager.ts`)
+
+Central registry for all active agents. Ties together the Trello card, git worktree, state machine, and CLI session into a single agent concept.
+
+- **`createAgent(card, runbook, repoPath)`** — Creates a worktree (branch derived from card name), instantiates a state machine, registers the agent. Returns the agent ID.
+- **`destroyAgent(agentId, repoPath)`** — Removes the worktree, disconnects event forwarding, deletes from registry.
+- **`getAgent(agentId)`** / **`listAgents()`** — Returns `AgentSnapshot` objects with card info, worktree info, state machine snapshot, and session ID.
+- **`getStateMachine(agentId)`** — Exposes the state machine for the orchestration loop (#013) to drive.
+- **`setSessionId(agentId, sessionId)`** — Links/unlinks a CLI session to an agent.
+- **Event forwarding:** State machine events are re-emitted as agent-level events (`agent:created`, `agent:state-changed`, `agent:step-advanced`, `agent:step-completed`, `agent:phase-completed`, `agent:error`, `agent:done`, `agent:destroyed`).
+- **Shared types:** `src/shared/agent-manager.ts` defines `CardInfo`, `AgentSnapshot`, and `AgentManagerEvents`.
+
 ### Session Registry (`src/main/session-registry.ts`)
 
 Manages active CliDriver instances and bridges their events to the renderer. One registry for the app.
