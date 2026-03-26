@@ -44,6 +44,25 @@ Wraps `git worktree` commands into an async service. Stateless exported function
 - **`cleanupOrphanedWorktrees(repoPath)`** — Removes all orphans and their branches.
 - **Shared types:** `src/shared/worktree.ts` defines `WorktreeInfo` for use across main and renderer.
 
+### Session Registry (`src/main/session-registry.ts`)
+
+Manages active CliDriver instances and bridges their events to the renderer. One registry for the app.
+
+- **`createSession(options)`** — Creates a CliDriver, wires event forwarding, starts the session. Returns a UUID session ID immediately; the session runs async.
+- **`getSession(sessionId)`** — Retrieves a CliDriver by ID (for responding to permissions/questions).
+- **`abortAllSessions()`** — Aborts all active sessions (called on app quit).
+- **Event forwarding:** All CliDriver events are pushed to the renderer via `webContents.send('cli:event', payload)`. Payload shape: `{ sessionId, event: CliEvent }` (discriminated union).
+- Sessions auto-remove from the registry on completion or error.
+
+### IPC Bridge (`src/shared/ipc.ts`)
+
+Central definition of all IPC channel constants and the renderer API type.
+
+- **`IpcChannels`** — String constants for all channels (config, dialog, CLI, worktree). Prevents typos and provides a single source of truth.
+- **`CliEvent`** — Discriminated union of all CLI events pushed from main to renderer.
+- **`CliEventPayload`** — Wrapper with `sessionId` + `CliEvent` for the `cli:event` channel.
+- **`AgentAPI`** — TypeScript interface for the CLI/worktree portion of the preload API.
+
 ## Development Workflow
 
 **Every Trello card must follow the runbook in [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).** This is a 6-phase, 29-step process: pick up → research → design → implement → verify → review & ship. No skipping phases. Create a tracker doc before starting.
@@ -77,7 +96,7 @@ Wraps `git worktree` commands into an async service. Stateless exported function
 
 ### IPC Channels
 
-Named `namespace:action` (e.g., `config:load`, `dialog:openDirectory`). All use `ipcMain.handle` / `ipcRenderer.invoke` (async request-response). Handlers registered in `src/main/ipc-handlers.ts`, exposed to renderer via the `api` object in `src/preload/index.ts` (typed in `src/preload/index.d.ts`).
+Named `namespace:action` (e.g., `config:load`, `cli:start`, `worktree:list`). Channel name constants live in `src/shared/ipc.ts` (`IpcChannels`). Request-response channels use `ipcMain.handle` / `ipcRenderer.invoke`. The `cli:event` channel is a one-way push from main to renderer via `webContents.send` for streaming CLI session events. Handlers registered in `src/main/ipc-handlers.ts`, exposed to renderer via the `api` object in `src/preload/index.ts` (typed in `src/preload/index.d.ts`).
 
 ### Configuration
 

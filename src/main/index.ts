@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers } from './ipc-handlers'
+import { abortAllSessions } from './session-registry'
 
 function createWindow(): void {
   // Create the browser window.
@@ -59,6 +60,11 @@ app.whenReady().then(() => {
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+// Abort all CLI sessions before quitting
+app.on('will-quit', () => {
+  abortAllSessions()
 })
 
 // Quit when all windows are closed, except on macOS. There, it's common
