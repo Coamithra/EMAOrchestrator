@@ -33,6 +33,17 @@ Wraps the Agent SDK's `query()` into an EventEmitter-based service. One `CliDriv
 - **Session resumption:** Pass a previous `sessionId` to `CliSessionOptions` to resume a conversation.
 - **Shared types:** `src/shared/cli-driver.ts` defines all event/state types for use across main process and renderer.
 
+### Worktree Manager (`src/main/worktree-manager.ts`)
+
+Wraps `git worktree` commands into an async service. Stateless exported functions (same pattern as config-service). One worktree per agent session, created as siblings to the main repo directory.
+
+- **`createWorktree(repoPath, branch)`** — Creates worktree + new branch from main. Reuses branch if it already exists.
+- **`listWorktrees(repoPath)`** — Parses `git worktree list --porcelain` into typed `WorktreeInfo[]`.
+- **`removeWorktree(repoPath, branch)`** — Removes worktree, prunes, deletes branch.
+- **`getOrphanedWorktrees(repoPath)`** — Returns all non-main worktrees (orphans on startup).
+- **`cleanupOrphanedWorktrees(repoPath)`** — Removes all orphans and their branches.
+- **Shared types:** `src/shared/worktree.ts` defines `WorktreeInfo` for use across main and renderer.
+
 ## Development Workflow
 
 **Every Trello card must follow the runbook in [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).** This is a 6-phase, 29-step process: pick up → research → design → implement → verify → review & ship. No skipping phases. Create a tracker doc before starting.
