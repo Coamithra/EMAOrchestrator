@@ -78,13 +78,10 @@ function StepProgress({
   // phase is auto-expanded unless the user explicitly collapses it.
   const [manualToggles, setManualToggles] = useState<Record<number, boolean>>({})
 
-  const isPhaseExpanded = useCallback(
-    (phaseIndex: number): boolean => {
-      if (phaseIndex in manualToggles) return manualToggles[phaseIndex]
-      return phaseIndex === stateSnapshot.phaseIndex
-    },
-    [manualToggles, stateSnapshot.phaseIndex]
-  )
+  function isPhaseExpanded(phaseIndex: number): boolean {
+    if (phaseIndex in manualToggles) return manualToggles[phaseIndex]
+    return phaseIndex === stateSnapshot.phaseIndex
+  }
 
   const togglePhase = useCallback(
     (index: number) => {
@@ -114,7 +111,7 @@ function StepProgress({
               </span>
               <span className="step-progress__phase-name">{phase.name}</span>
               <span className="step-progress__chevron">
-                {expanded ? '\u25BC' : '\u25B6'}
+                {expanded ? '\u25BE' : '\u25B8'}
               </span>
             </button>
             {expanded && (

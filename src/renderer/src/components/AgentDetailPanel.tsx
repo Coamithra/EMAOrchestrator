@@ -20,6 +20,7 @@ function getStateLabel(agent: AgentSnapshot): string {
   if (stateSnapshot.state === 'done') return 'Done'
   if (stateSnapshot.state === 'error') return stateSnapshot.error || 'Error'
   if (stateSnapshot.state === 'idle') return 'Idle'
+  if (stateSnapshot.state === 'picking_card') return 'Picking card\u2026'
   if (stateSnapshot.state === 'waiting_for_human') return 'Waiting for input'
   if (stateSnapshot.phaseIndex >= 0) {
     return `Phase ${stateSnapshot.phaseIndex + 1} of ${stateSnapshot.totalPhases} \u2014 Step ${stateSnapshot.stepIndex + 1} of ${stateSnapshot.totalSteps}`
@@ -56,6 +57,7 @@ function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
       <div className="agent-detail-panel__body">
         <div className="agent-detail-panel__progress">
           <StepProgress
+            key={agent.id}
             stateSnapshot={agent.stateSnapshot}
             stepHistory={agent.stepHistory}
             phases={phases}

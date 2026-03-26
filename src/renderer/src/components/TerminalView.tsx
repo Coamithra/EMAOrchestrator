@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { Terminal } from 'xterm'
+import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import type { CliEventPayload } from '@shared/ipc'
-import 'xterm/css/xterm.css'
+import '@xterm/xterm/css/xterm.css'
 import './TerminalView.css'
 
 interface TerminalViewProps {
@@ -11,8 +11,6 @@ interface TerminalViewProps {
 
 function TerminalView({ agentId }: TerminalViewProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
-  const terminalRef = useRef<Terminal | null>(null)
-  const fitAddonRef = useRef<FitAddon | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -43,14 +41,11 @@ function TerminalView({ agentId }: TerminalViewProps): React.JSX.Element {
       fitAddon.fit()
     })
 
-    terminalRef.current = terminal
-    fitAddonRef.current = fitAddon
-
-    // Refit on container resize
+    // Debounced refit on container resize
+    let resizeTimer: ReturnType<typeof setTimeout>
     const observer = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
-        fitAddon.fit()
-      })
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => fitAddon.fit(), 50)
     })
     observer.observe(container)
 
@@ -67,10 +62,9 @@ function TerminalView({ agentId }: TerminalViewProps): React.JSX.Element {
 
     return () => {
       unsubscribe()
+      clearTimeout(resizeTimer)
       observer.disconnect()
       terminal.dispose()
-      terminalRef.current = null
-      fitAddonRef.current = null
     }
   }, [agentId])
 
