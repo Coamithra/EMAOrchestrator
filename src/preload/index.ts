@@ -60,7 +60,9 @@ const api = {
   respondToOrchestrationQuestion: (agentId: string, response: unknown): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_RESPOND_QUESTION, agentId, response),
   isOrchestrationRunning: (agentId: string): Promise<boolean> =>
-    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_IS_RUNNING, agentId)
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_IS_RUNNING, agentId),
+  getConcurrencyStatus: (): Promise<unknown> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_GET_CONCURRENCY_STATUS)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -334,4 +334,220 @@ describe('OrchestrationLoop', () => {
       expect(loop.isRunning('nonexistent')).toBe(false)
     })
   })
+
+  describe('concurrency management', () => {
+    /** Create N agents in the same manager. */
+    async function setupMultipleAgents(
+      n: number
+    ): Promise<{ manager: AgentManager; agentIds: string[] }> {
+      const manager = new AgentManager()
+      mockSaveAgent.mockResolvedValue(undefined)
+
+      const agentIds: string[] = []
+      for (let i = 0; i < n; i++) {
+        const card: CardInfo = {
+          id: `card-${i}`,
+          name: `#${i} Test card ${i}`,
+          description: `Card ${i}`
+        }
+        mockCreateWorktree.mockResolvedValue(fakeWorktree(`feat-test-card-${i}`))
+        agentIds.push(await manager.createAgent(card, twoPhaseRunbook, 'C:/Proj/main'))
+      }
+      return { manager, agentIds }
+    }
+
+    it('queues agents when concurrency limit is reached', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(3)
+      const loop = new OrchestrationLoop(manager, 2)
+
+      // Make sessions hang so agents stay running
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      const queuedEvents: string[] = []
+      loop.on('agent:queued', (id) => queuedEvents.push(id))
+
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1])
+      loop.startAgent(agentIds[2]) // should be queued
+
+      expect(loop.isRunning(agentIds[0])).toBe(true)
+      expect(loop.isRunning(agentIds[1])).toBe(true)
+      expect(loop.isRunning(agentIds[2])).toBe(true) // queued counts as "running"
+      expect(loop.isQueued(agentIds[2])).toBe(true)
+      expect(loop.isQueued(agentIds[0])).toBe(false)
+      expect(queuedEvents).toEqual([agentIds[2]])
+    })
+
+    it('auto-starts queued agent when a slot opens', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(3)
+      const loop = new OrchestrationLoop(manager, 2)
+
+      mockSuccessfulSession()
+
+      const dequeuedEvents: string[] = []
+      loop.on('agent:dequeued', (id) => dequeuedEvents.push(id))
+
+      // Start first two — they'll complete immediately (mockSuccessfulSession)
+      // but third gets queued initially since limit is 2
+      // Agent 0 starts, completes synchronously in microtask, opens slot...
+      // Actually let's use a controlled approach: hang first two, stop one
+
+      // Make sessions hang
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1])
+      loop.startAgent(agentIds[2]) // queued
+
+      expect(loop.isQueued(agentIds[2])).toBe(true)
+
+      // Stop agent 0 — should dequeue agent 2
+      loop.stopAgent(agentIds[0])
+
+      expect(loop.isQueued(agentIds[2])).toBe(false)
+      expect(loop.isRunning(agentIds[2])).toBe(true)
+      expect(dequeuedEvents).toEqual([agentIds[2]])
+    })
+
+    it('stopping a queued agent removes it from queue without aborting driver', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(3)
+      const loop = new OrchestrationLoop(manager, 2)
+
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1])
+      loop.startAgent(agentIds[2]) // queued
+
+      const stoppedEvents: string[] = []
+      loop.on('agent:stopped', (id) => stoppedEvents.push(id))
+
+      mockAbort.mockClear()
+      loop.stopAgent(agentIds[2])
+
+      expect(loop.isQueued(agentIds[2])).toBe(false)
+      expect(loop.isRunning(agentIds[2])).toBe(false)
+      expect(stoppedEvents).toEqual([agentIds[2]])
+      // abort() should NOT have been called — agent had no driver
+      expect(mockAbort).not.toHaveBeenCalled()
+    })
+
+    it('abortAll clears the queue', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(3)
+      const loop = new OrchestrationLoop(manager, 1)
+
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1]) // queued
+      loop.startAgent(agentIds[2]) // queued
+
+      expect(loop.isQueued(agentIds[1])).toBe(true)
+      expect(loop.isQueued(agentIds[2])).toBe(true)
+
+      loop.abortAll()
+
+      expect(loop.isRunning(agentIds[0])).toBe(false)
+      expect(loop.isQueued(agentIds[1])).toBe(false)
+      expect(loop.isQueued(agentIds[2])).toBe(false)
+    })
+
+    it('getConcurrencyStatus reports correct counts', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(3)
+      const loop = new OrchestrationLoop(manager, 2)
+
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      expect(loop.getConcurrencyStatus()).toEqual({ running: 0, queued: 0, max: 2 })
+
+      loop.startAgent(agentIds[0])
+      expect(loop.getConcurrencyStatus()).toEqual({ running: 1, queued: 0, max: 2 })
+
+      loop.startAgent(agentIds[1])
+      expect(loop.getConcurrencyStatus()).toEqual({ running: 2, queued: 0, max: 2 })
+
+      loop.startAgent(agentIds[2])
+      expect(loop.getConcurrencyStatus()).toEqual({ running: 2, queued: 1, max: 2 })
+    })
+
+    it('throws if agent is already queued', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(2)
+      const loop = new OrchestrationLoop(manager, 1)
+
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1]) // queued
+
+      expect(() => loop.startAgent(agentIds[1])).toThrow('already queued')
+    })
+
+    it('setMaxConcurrentAgents dequeues agents when limit increases', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(3)
+      const loop = new OrchestrationLoop(manager, 1)
+
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1]) // queued
+      loop.startAgent(agentIds[2]) // queued
+
+      expect(loop.getConcurrencyStatus()).toEqual({ running: 1, queued: 2, max: 1 })
+
+      const dequeuedEvents: string[] = []
+      loop.on('agent:dequeued', (id) => dequeuedEvents.push(id))
+
+      loop.setMaxConcurrentAgents(3)
+
+      expect(loop.getConcurrencyStatus()).toEqual({ running: 3, queued: 0, max: 3 })
+      expect(dequeuedEvents).toEqual([agentIds[1], agentIds[2]])
+    })
+
+    it('dequeues when a running agent completes', async () => {
+      const { manager, agentIds } = await setupMultipleAgents(2)
+      const loop = new OrchestrationLoop(manager, 1)
+
+      mockSuccessfulSession()
+
+      const dequeuedEvents: string[] = []
+      loop.on('agent:dequeued', (id) => dequeuedEvents.push(id))
+
+      // Make agent 1's session hang so we can observe it being dequeued
+      let callCount = 0
+      mockStartSession.mockImplementation(function (this: {
+        emit: (event: string, ...args: unknown[]) => void
+      }) {
+        callCount++
+        if (callCount <= 3) {
+          // First 3 calls (agent 0's 3 steps) complete immediately
+          this.emit('session:init', { sessionId: 'sdk-1', model: 'claude-opus-4-6', tools: [] })
+          this.emit('assistant:message', { text: 'Done.', toolUses: [] })
+          this.emit('session:result', {
+            subtype: 'success',
+            sessionId: 'sdk-1',
+            costUsd: 0.01,
+            numTurns: 1,
+            durationMs: 1000
+          })
+          return Promise.resolve()
+        }
+        // Agent 1's steps: hang
+        return new Promise(() => {})
+      })
+
+      // Start agent 0 (runs), queue agent 1
+      loop.startAgent(agentIds[0])
+      loop.startAgent(agentIds[1])
+      expect(loop.isQueued(agentIds[1])).toBe(true)
+
+      // Wait for agent 0 to complete
+      await new Promise<void>((resolve) => {
+        loop.on('agent:completed', () => resolve())
+      })
+
+      // Agent 1 should have been dequeued
+      expect(dequeuedEvents).toEqual([agentIds[1]])
+      expect(loop.isQueued(agentIds[1])).toBe(false)
+    })
+  })
 })

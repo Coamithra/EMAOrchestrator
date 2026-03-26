@@ -10,7 +10,7 @@ import type {
   UserQuestionResponse
 } from '../shared/cli-driver'
 import type { CliEventPayload } from '../shared/ipc'
-import type { OrchestrationLoopEvents } from '../shared/orchestration-loop'
+import type { OrchestrationLoopEvents, ConcurrencyStatus } from '../shared/orchestration-loop'
 
 interface RunningAgent {
   agentId: string
@@ -33,40 +33,52 @@ interface RunningAgent {
  */
 export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents> {
   private readonly running = new Map<string, RunningAgent>()
+  private readonly queued: string[] = []
+  private maxConcurrentAgents: number
 
-  constructor(private readonly agentManager: AgentManager) {
+  constructor(
+    private readonly agentManager: AgentManager,
+    maxConcurrentAgents = 3
+  ) {
     super()
+    this.maxConcurrentAgents = maxConcurrentAgents
   }
 
   /**
    * Start the orchestration loop for an agent.
-   * Handles any starting state: idle, picking_card, error, waiting_for_human, or mid-phase.
+   * If the concurrency limit is reached, the agent is queued and will
+   * auto-start when a slot opens.
    */
   startAgent(agentId: string): void {
     if (this.running.has(agentId)) {
       throw new Error(`Agent ${agentId} is already running`)
     }
+    if (this.queued.includes(agentId)) {
+      throw new Error(`Agent ${agentId} is already queued`)
+    }
     if (!this.agentManager.getAgent(agentId)) {
       throw new Error(`Unknown agent: ${agentId}`)
     }
 
-    const entry: RunningAgent = {
-      agentId,
-      driver: null,
-      sdkSessionId: null,
-      lastAssistantText: '',
-      stopped: false
+    if (this.running.size >= this.maxConcurrentAgents) {
+      this.queued.push(agentId)
+      this.emit('agent:queued', agentId, this.queued.length)
+      return
     }
-    this.running.set(agentId, entry)
 
-    this.runAgentLoop(entry).catch((err) => {
-      console.error(`Orchestration loop error for agent ${agentId}:`, err)
-      this.handleAgentError(agentId, err instanceof Error ? err.message : String(err))
-    })
+    this.launchAgent(agentId)
   }
 
-  /** Stop an agent's orchestration loop. Aborts any active CLI session. */
+  /** Stop an agent's orchestration loop. Removes from queue or aborts active session. */
   stopAgent(agentId: string): void {
+    // Check queue first — agent may not have started yet
+    const queueIndex = this.queued.indexOf(agentId)
+    if (queueIndex !== -1) {
+      this.queued.splice(queueIndex, 1)
+      this.emit('agent:stopped', agentId)
+      return
+    }
+
     const entry = this.running.get(agentId)
     if (!entry) return
 
@@ -76,6 +88,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.agentManager.setSessionId(agentId, null)
     this.agentManager.setPendingHumanInteraction(agentId, null)
     this.emit('agent:stopped', agentId)
+    this.tryDequeue()
   }
 
   /**
@@ -112,13 +125,35 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.agentManager.setPendingHumanInteraction(agentId, null)
   }
 
-  /** Whether an agent's loop is currently active. */
+  /** Whether an agent's loop is currently active (running or queued). */
   isRunning(agentId: string): boolean {
-    return this.running.has(agentId)
+    return this.running.has(agentId) || this.queued.includes(agentId)
   }
 
-  /** Abort all running agent loops. Called on app quit. */
+  /** Whether an agent is waiting in the queue (not yet running). */
+  isQueued(agentId: string): boolean {
+    return this.queued.includes(agentId)
+  }
+
+  /** Get the concurrency status snapshot. */
+  getConcurrencyStatus(): ConcurrencyStatus {
+    return {
+      running: this.running.size,
+      queued: this.queued.length,
+      max: this.maxConcurrentAgents
+    }
+  }
+
+  /** Update the max concurrent agents limit. Does not kill running agents. */
+  setMaxConcurrentAgents(max: number): void {
+    this.maxConcurrentAgents = max
+    // If the new limit is higher, try to dequeue waiting agents
+    this.tryDequeue()
+  }
+
+  /** Abort all running agent loops and clear the queue. Called on app quit. */
   abortAll(): void {
+    this.queued.length = 0
     for (const [agentId, entry] of this.running) {
       entry.stopped = true
       entry.driver?.abort()
@@ -130,6 +165,34 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
+
+  /** Actually launch an agent's orchestration loop (no concurrency check). */
+  private launchAgent(agentId: string): void {
+    const entry: RunningAgent = {
+      agentId,
+      driver: null,
+      sdkSessionId: null,
+      lastAssistantText: '',
+      stopped: false
+    }
+    this.running.set(agentId, entry)
+
+    this.runAgentLoop(entry).catch((err) => {
+      console.error(`Orchestration loop error for agent ${agentId}:`, err)
+      this.handleAgentError(agentId, err instanceof Error ? err.message : String(err))
+    })
+  }
+
+  /** Start the next queued agent if a slot is available. */
+  private tryDequeue(): void {
+    while (this.queued.length > 0 && this.running.size < this.maxConcurrentAgents) {
+      const nextId = this.queued.shift()!
+      // Agent may have been destroyed while queued
+      if (!this.agentManager.getAgent(nextId)) continue
+      this.emit('agent:dequeued', nextId)
+      this.launchAgent(nextId)
+    }
+  }
 
   private async runAgentLoop(entry: RunningAgent): Promise<void> {
     const { agentId } = entry
@@ -196,6 +259,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
     this.running.delete(agentId)
     this.agentManager.setSessionId(agentId, null)
+    this.tryDequeue()
   }
 
   /**

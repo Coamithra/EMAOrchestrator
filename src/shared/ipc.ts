@@ -12,6 +12,7 @@ import type {
 } from './cli-driver'
 import type { WorktreeInfo } from './worktree'
 import type { AgentSnapshot } from './agent-manager'
+import type { ConcurrencyStatus } from './orchestration-loop'
 
 // ---------------------------------------------------------------------------
 // IPC Channel Constants
@@ -52,7 +53,8 @@ export const IpcChannels = {
   ORCHESTRATION_STOP: 'orchestration:stop',
   ORCHESTRATION_RESPOND_PERMISSION: 'orchestration:respondPermission',
   ORCHESTRATION_RESPOND_QUESTION: 'orchestration:respondQuestion',
-  ORCHESTRATION_IS_RUNNING: 'orchestration:isRunning'
+  ORCHESTRATION_IS_RUNNING: 'orchestration:isRunning',
+  ORCHESTRATION_GET_CONCURRENCY_STATUS: 'orchestration:getConcurrencyStatus'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -111,4 +113,5 @@ export interface OrchestrationAPI {
   respondToOrchestrationPermission(agentId: string, response: PermissionResponse): Promise<void>
   respondToOrchestrationQuestion(agentId: string, response: UserQuestionResponse): Promise<void>
   isOrchestrationRunning(agentId: string): Promise<boolean>
+  getConcurrencyStatus(): Promise<ConcurrencyStatus>
 }

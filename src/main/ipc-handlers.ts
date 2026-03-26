@@ -199,4 +199,10 @@ export function registerIpcHandlers(
   ipcMain.handle(IpcChannels.ORCHESTRATION_IS_RUNNING, (_event, agentId: string) => {
     return orchestrationLoop?.isRunning(agentId) ?? false
   })
+
+  ipcMain.handle(IpcChannels.ORCHESTRATION_GET_CONCURRENCY_STATUS, () => {
+    return (
+      orchestrationLoop?.getConcurrencyStatus() ?? { running: 0, queued: 0, max: 3 }
+    )
+  })
 }

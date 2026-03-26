@@ -107,7 +107,8 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  orchestrationLoop = new OrchestrationLoop(agentManager)
+  const config = await loadConfig()
+  orchestrationLoop = new OrchestrationLoop(agentManager, config?.maxConcurrentAgents)
 
   registerIpcHandlers(agentManager, orchestrationLoop)
 

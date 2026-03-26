@@ -116,18 +116,23 @@ Manages active CliDriver instances and bridges their events to the renderer. One
 
 Central controller that drives agents through runbook steps. One async loop per agent runs concurrently. Ties together AgentManager, AgentStateMachine, CliDriver, and PromptGenerator.
 
-- **`startAgent(agentId)`** — Starts the loop for an agent. Handles any starting state (idle, error, waiting_for_human, mid-phase). Transitions through picking_card → first phase automatically.
-- **`stopAgent(agentId)`** — Aborts the current CLI session and stops the loop.
+- **Concurrency management:** Enforces a configurable max concurrent agents limit (from `AppConfig.maxConcurrentAgents`, default 3). When the limit is reached, new agents are queued and auto-start when a slot opens (agent completes, errors, or is stopped). Queueing is tracked in the loop, not in the agent state machine.
+- **`startAgent(agentId)`** — Starts the loop for an agent, or queues it if the concurrency limit is reached. Handles any starting state (idle, error, waiting_for_human, mid-phase).
+- **`stopAgent(agentId)`** — Removes from queue (if queued) or aborts the active CLI session (if running). Triggers dequeue.
 - **`respondToPermission(agentId, response)`** — Unblocks the CliDriver's pending permission and resumes the state machine from waiting_for_human.
 - **`respondToQuestion(agentId, response)`** — Unblocks the CliDriver's pending question and resumes the state machine.
-- **`isRunning(agentId)`** / **`abortAll()`** — Query and cleanup helpers.
+- **`isRunning(agentId)`** — Returns true if the agent is running OR queued.
+- **`isQueued(agentId)`** — Returns true only if the agent is waiting in the queue.
+- **`getConcurrencyStatus()`** — Returns `{ running, queued, max }` snapshot for the UI.
+- **`setMaxConcurrentAgents(max)`** — Live-updates the limit. Does not kill running agents; dequeues if the new limit is higher.
+- **`abortAll()`** — Clears the queue and aborts all running agents. Called on app quit.
 - **Step execution:** Each step creates a fresh CliDriver, generates a prompt via `generateStepPrompt()`, runs the session, extracts a summary from the last assistant message, calls `advanceStep()` (which auto-transitions phases), then sets the summary.
 - **Session resumption:** Steps within the same agent share an SDK session ID (per spike #009). The first step creates a new session; subsequent steps resume it.
 - **Permission/question flow:** CliDriver blocks internally (deferred promise). The loop sets `waiting_for_human` on the state machine and stores the pending interaction. When the user responds via IPC, the driver unblocks and the session continues. The `runStep()` Promise stays pending during pauses — no polling needed.
-- **Events:** Emits `agent:running`, `agent:paused`, `agent:completed`, `agent:errored`, `agent:stopped`.
+- **Events:** Emits `agent:running`, `agent:queued`, `agent:dequeued`, `agent:completed`, `agent:errored`, `agent:stopped`.
 - **Renderer forwarding:** All CliDriver events are forwarded to the renderer via `cli:event` channel using session ID `orchestration-<agentId>`.
-- **Shared types:** `src/shared/orchestration-loop.ts` defines `OrchestrationLoopEvents`.
-- **IPC channels:** `orchestration:start`, `orchestration:stop`, `orchestration:respondPermission`, `orchestration:respondQuestion`, `orchestration:isRunning`.
+- **Shared types:** `src/shared/orchestration-loop.ts` defines `OrchestrationLoopEvents` and `ConcurrencyStatus`.
+- **IPC channels:** `orchestration:start`, `orchestration:stop`, `orchestration:respondPermission`, `orchestration:respondQuestion`, `orchestration:isRunning`, `orchestration:getConcurrencyStatus`.
 
 ### IPC Bridge (`src/shared/ipc.ts`)
 
