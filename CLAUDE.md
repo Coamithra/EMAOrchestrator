@@ -77,13 +77,29 @@ Tracks a single agent's lifecycle as it works through a parsed runbook. Higher-l
 
 Central registry for all active agents. Ties together the Trello card, git worktree, state machine, and CLI session into a single agent concept.
 
-- **`createAgent(card, runbook, repoPath)`** — Creates a worktree (branch derived from card name), instantiates a state machine, registers the agent. Returns the agent ID.
-- **`destroyAgent(agentId, repoPath)`** — Removes the worktree, disconnects event forwarding, deletes from registry.
-- **`getAgent(agentId)`** / **`listAgents()`** — Returns `AgentSnapshot` objects with card info, worktree info, state machine snapshot, and session ID.
+- **`createAgent(card, runbook, repoPath)`** — Creates a worktree (branch derived from card name), instantiates a state machine, registers the agent. Returns the agent ID. Auto-persists.
+- **`restoreAgent(persisted)`** — Restores an agent from persisted data. Reconstructs state machine via `AgentStateMachine.restore()`, reuses the original agent ID, skips worktree creation. Used on app startup.
+- **`destroyAgent(agentId, repoPath)`** — Removes the worktree, disconnects event forwarding, deletes from registry. Removes persisted state.
+- **`getAgent(agentId)`** / **`listAgents()`** — Returns `AgentSnapshot` objects with card info, worktree info, state machine snapshot, session ID, step history, and interruption status.
 - **`getStateMachine(agentId)`** — Exposes the state machine for the orchestration loop (#013) to drive.
 - **`setSessionId(agentId, sessionId)`** — Links/unlinks a CLI session to an agent.
-- **Event forwarding:** State machine events are re-emitted as agent-level events (`agent:created`, `agent:state-changed`, `agent:step-advanced`, `agent:step-completed`, `agent:phase-completed`, `agent:error`, `agent:done`, `agent:destroyed`).
+- **`setStepSummary(agentId, phaseIndex, stepIndex, summary)`** — Sets a summary on a completed step record. Called by the orchestration loop.
+- **`setPendingHumanInteraction(agentId, interaction)`** — Sets or clears the pending human interaction. Called by the orchestration loop.
+- **Event forwarding:** State machine events are re-emitted as agent-level events (`agent:created`, `agent:state-changed`, `agent:step-advanced`, `agent:step-completed`, `agent:phase-completed`, `agent:error`, `agent:done`, `agent:destroyed`). Step completions also record history entries.
 - **Shared types:** `src/shared/agent-manager.ts` defines `CardInfo`, `AgentSnapshot`, and `AgentManagerEvents`.
+
+### Agent Persistence Service (`src/main/agent-persistence-service.ts`)
+
+Persists agent state to `app.getPath('userData')/agents.json` so agents survive app restarts. Follows the config-service pattern (stateless exported functions, JSON, null on error).
+
+- **`loadPersistedAgents()`** — Reads and parses the agents file. Returns `null` on missing file, corrupt JSON, or version mismatch.
+- **`savePersistedAgents(store)`** — Writes the full store as pretty-printed JSON.
+- **`saveAgent(agent)`** — Upserts a single agent (read-modify-write; safe in single-threaded main process).
+- **`removePersistedAgent(agentId)`** — Removes an agent entry from the store.
+- **`reconcileAgents(store)`** — On startup, checks each persisted agent's worktree. Missing worktree → stale. Was mid-run → interrupted (sets `interruptedAt`). Otherwise → restored.
+- **State machine restore:** `AgentStateMachine.restore(runbook, data)` reconstructs a machine from persisted `StateMachineRestoreData` without emitting events. The runbook is persisted alongside each agent.
+- **Save triggers:** `AgentManager` auto-saves on every `state:changed` and `step:completed` event (fire-and-forget).
+- **Shared types:** `src/shared/agent-persistence.ts` defines `PersistedAgent`, `PersistedAgentStore`, `StepCompletionRecord`, `PendingHumanInteraction`, `ReconciliationResult`.
 
 ### Session Registry (`src/main/session-registry.ts`)
 
@@ -99,7 +115,7 @@ Manages active CliDriver instances and bridges their events to the renderer. One
 
 Central definition of all IPC channel constants and the renderer API type.
 
-- **`IpcChannels`** — String constants for all channels (config, dialog, CLI, worktree). Prevents typos and provides a single source of truth.
+- **`IpcChannels`** — String constants for all channels (config, dialog, CLI, worktree, agent persistence). Prevents typos and provides a single source of truth.
 - **`CliEvent`** — Discriminated union of all CLI events pushed from main to renderer.
 - **`CliEventPayload`** — Wrapper with `sessionId` + `CliEvent` for the `cli:event` channel.
 - **`AgentAPI`** — TypeScript interface for the CLI/worktree portion of the preload API.

@@ -129,17 +129,25 @@ export async function removeWorktree(repoPath: string, worktree: WorktreeInfo): 
 }
 
 /**
- * Get all non-main worktrees. On app startup, these are considered orphaned
- * since no agent session state persists across restarts.
+ * Get all non-main worktrees that are not in the known set.
+ *
+ * If `knownWorktreePaths` is provided, worktrees whose paths appear in the
+ * set are excluded (they belong to persisted agents and are not orphans).
  */
-export async function getOrphanedWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
+export async function getOrphanedWorktrees(
+  repoPath: string,
+  knownWorktreePaths?: Set<string>
+): Promise<WorktreeInfo[]> {
   const worktrees = await listWorktrees(repoPath)
-  return worktrees.filter((wt) => !wt.isMain)
+  return worktrees.filter((wt) => !wt.isMain && !knownWorktreePaths?.has(wt.path))
 }
 
 /** Remove all orphaned worktrees and their branches. */
-export async function cleanupOrphanedWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
-  const orphans = await getOrphanedWorktrees(repoPath)
+export async function cleanupOrphanedWorktrees(
+  repoPath: string,
+  knownWorktreePaths?: Set<string>
+): Promise<WorktreeInfo[]> {
+  const orphans = await getOrphanedWorktrees(repoPath, knownWorktreePaths)
 
   for (const orphan of orphans) {
     await removeWorktree(repoPath, orphan)

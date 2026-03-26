@@ -243,6 +243,30 @@ describe('getOrphanedWorktrees', () => {
     expect(orphans.every((o) => !o.isMain)).toBe(true)
   })
 
+  it('excludes worktrees in the knownWorktreePaths set', async () => {
+    const porcelain = [
+      'worktree C:/Proj/main',
+      'HEAD abc1234',
+      'branch refs/heads/main',
+      '',
+      'worktree C:/Proj/feat/orphan-1',
+      'HEAD def5678',
+      'branch refs/heads/feat/orphan-1',
+      '',
+      'worktree C:/Proj/feat/known-agent',
+      'HEAD 9ab0123',
+      'branch refs/heads/feat/known-agent',
+      ''
+    ].join('\n')
+
+    mockExecFile.mockResolvedValueOnce({ stdout: porcelain, stderr: '' })
+
+    const known = new Set(['C:/Proj/feat/known-agent'])
+    const orphans = await getOrphanedWorktrees('C:/Proj/main', known)
+    expect(orphans).toHaveLength(1)
+    expect(orphans[0].branch).toBe('feat/orphan-1')
+  })
+
   it('returns empty array when only main exists', async () => {
     const porcelain = ['worktree C:/Proj/main', 'HEAD abc1234', 'branch refs/heads/main', ''].join(
       '\n'

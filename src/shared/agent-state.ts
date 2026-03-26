@@ -28,6 +28,19 @@ export interface AgentStateSnapshot {
   error?: string
 }
 
+/** Data needed to restore a state machine to a previous position. */
+export interface StateMachineRestoreData {
+  state: AgentState
+  phaseIndex: number
+  stepIndex: number
+  completedSteps: number
+  completedStepCounts: number[]
+  error?: string
+  stateBeforeWaiting?: AgentState
+  phaseIndexBeforeWaiting?: number
+  stepIndexBeforeWaiting?: number
+}
+
 /** Events emitted by the agent state machine. */
 export type AgentStateMachineEvents = {
   'state:changed': (newState: AgentState, previousState: AgentState) => void

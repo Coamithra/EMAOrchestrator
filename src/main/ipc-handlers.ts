@@ -7,6 +7,8 @@ import {
   removeWorktree,
   cleanupOrphanedWorktrees
 } from './worktree-manager'
+import { removePersistedAgent } from './agent-persistence-service'
+import type { AgentManager } from './agent-manager'
 import type { AppConfig } from '../shared/config'
 import type {
   CliSessionOptions,
@@ -16,7 +18,7 @@ import type {
 import type { WorktreeInfo } from '../shared/worktree'
 import { IpcChannels } from '../shared/ipc'
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers(agentManager?: AgentManager): void {
   // ---------------------------------------------------------------------------
   // Config
   // ---------------------------------------------------------------------------
@@ -127,5 +129,21 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IpcChannels.WORKTREE_CLEANUP_ORPHANS, async (_event, repoPath: string) => {
     return await cleanupOrphanedWorktrees(repoPath)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Agent Persistence
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IpcChannels.AGENT_LIST, () => {
+    return agentManager?.listAgents() ?? []
+  })
+
+  ipcMain.handle(IpcChannels.AGENT_GET, (_event, agentId: string) => {
+    return agentManager?.getAgent(agentId) ?? null
+  })
+
+  ipcMain.handle(IpcChannels.AGENT_DISMISS, async (_event, agentId: string) => {
+    await removePersistedAgent(agentId)
   })
 }

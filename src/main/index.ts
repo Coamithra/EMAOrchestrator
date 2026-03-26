@@ -4,6 +4,16 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers } from './ipc-handlers'
 import { abortAllSessions } from './session-registry'
+import { AgentManager } from './agent-manager'
+import {
+  loadPersistedAgents,
+  reconcileAgents,
+  savePersistedAgents
+} from './agent-persistence-service'
+import { loadConfig } from './config-service'
+import { cleanupOrphanedWorktrees } from './worktree-manager'
+
+const agentManager = new AgentManager()
 
 function createWindow(): void {
   // Create the browser window.
@@ -37,10 +47,54 @@ function createWindow(): void {
   }
 }
 
+/**
+ * Restore persisted agents on startup.
+ *
+ * Loads the persisted agent store, reconciles with the filesystem,
+ * restores valid agents, and cleans up orphaned worktrees.
+ */
+async function restorePersistedAgents(): Promise<void> {
+  const config = await loadConfig()
+  if (!config?.targetRepoPath) return
+
+  const store = await loadPersistedAgents()
+  if (!store || Object.keys(store.agents).length === 0) {
+    // No persisted agents — clean up any orphaned worktrees
+    await cleanupOrphanedWorktrees(config.targetRepoPath).catch(() => {})
+    return
+  }
+
+  const results = await reconcileAgents(store)
+
+  // Restore non-stale agents
+  const restoredWorktreePaths = new Set<string>()
+  for (const result of results) {
+    if (result.status === 'stale') {
+      // Remove stale agents from the store
+      delete store.agents[result.agentId]
+      continue
+    }
+    const persisted = store.agents[result.agentId]
+    try {
+      agentManager.restoreAgent(persisted)
+      restoredWorktreePaths.add(persisted.worktree.path)
+    } catch (err) {
+      console.error(`Failed to restore agent ${result.agentId}:`, err)
+      delete store.agents[result.agentId]
+    }
+  }
+
+  // Save reconciled state back (stale agents removed)
+  await savePersistedAgents(store).catch(() => {})
+
+  // Clean up worktrees that don't belong to any persisted agent
+  await cleanupOrphanedWorktrees(config.targetRepoPath, restoredWorktreePaths).catch(() => {})
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
@@ -51,9 +105,12 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerIpcHandlers()
+  registerIpcHandlers(agentManager)
 
   createWindow()
+
+  // Restore agents from previous session (async, non-blocking for window display)
+  await restorePersistedAgents()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

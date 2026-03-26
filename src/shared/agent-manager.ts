@@ -1,4 +1,5 @@
 import type { AgentStateSnapshot, AgentStepProgress } from './agent-state'
+import type { StepCompletionRecord, PendingHumanInteraction } from './agent-persistence'
 import type { WorktreeInfo } from './worktree'
 
 /** Trello card info needed to create an agent. */
@@ -15,6 +16,10 @@ export interface AgentSnapshot {
   worktree: WorktreeInfo
   stateSnapshot: AgentStateSnapshot
   sessionId: string | null
+  stepHistory: StepCompletionRecord[]
+  pendingHumanInteraction: PendingHumanInteraction | null
+  createdAt: string
+  interruptedAt: string | null
 }
 
 /** Events emitted by the AgentManager. */

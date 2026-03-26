@@ -351,6 +351,164 @@ describe('AgentStateMachine', () => {
     })
   })
 
+  describe('getRestoreData', () => {
+    it('captures full machine state including completedStepCounts', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.advanceStep() // complete step 0, on step 1
+
+      const data = sm.getRestoreData()
+      expect(data.state).toBe('Planning')
+      expect(data.phaseIndex).toBe(0)
+      expect(data.stepIndex).toBe(1)
+      expect(data.completedSteps).toBe(1)
+      expect(data.completedStepCounts).toEqual([1, 0, 0])
+    })
+
+    it('captures waiting-for-human save slots', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.advanceStep()
+      sm.setWaitingForHuman()
+
+      const data = sm.getRestoreData()
+      expect(data.state).toBe('waiting_for_human')
+      expect(data.stateBeforeWaiting).toBe('Planning')
+      expect(data.phaseIndexBeforeWaiting).toBe(0)
+      expect(data.stepIndexBeforeWaiting).toBe(1)
+    })
+
+    it('captures error state', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.on('error', () => {})
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.setError('test error')
+
+      const data = sm.getRestoreData()
+      expect(data.state).toBe('error')
+      expect(data.error).toBe('test error')
+    })
+  })
+
+  describe('restore', () => {
+    it('restores a machine mid-phase', () => {
+      // Advance a machine partway, capture data, restore into a new machine
+      const original = new AgentStateMachine(simpleRunbook)
+      original.transition('picking_card')
+      original.transition('Planning')
+      original.advanceStep() // complete step 0
+
+      const data = original.getRestoreData()
+      const restored = AgentStateMachine.restore(simpleRunbook, data)
+
+      expect(restored.getState()).toBe('Planning')
+      expect(restored.getSnapshot()).toEqual(original.getSnapshot())
+      expect(restored.getRestoreData()).toEqual(data)
+    })
+
+    it('restores a machine in waiting_for_human', () => {
+      const original = new AgentStateMachine(simpleRunbook)
+      original.transition('picking_card')
+      original.transition('Planning')
+      original.advanceStep()
+      original.setWaitingForHuman()
+
+      const data = original.getRestoreData()
+      const restored = AgentStateMachine.restore(simpleRunbook, data)
+
+      // Should be able to resume from waiting
+      restored.resumeFromWaiting()
+      expect(restored.getState()).toBe('Planning')
+      expect(restored.getSnapshot().phaseIndex).toBe(0)
+      expect(restored.getSnapshot().stepIndex).toBe(1)
+    })
+
+    it('restores a machine in error state', () => {
+      const original = new AgentStateMachine(simpleRunbook)
+      original.on('error', () => {})
+      original.transition('picking_card')
+      original.transition('Planning')
+      original.setError('test error')
+
+      const data = original.getRestoreData()
+      const restored = AgentStateMachine.restore(simpleRunbook, data)
+
+      expect(restored.getState()).toBe('error')
+      expect(restored.getSnapshot().error).toBe('test error')
+    })
+
+    it('restored machine can continue advancing', () => {
+      const original = new AgentStateMachine(simpleRunbook)
+      original.transition('picking_card')
+      original.transition('Planning')
+      original.advanceStep() // complete step 0, on step 1
+
+      const data = original.getRestoreData()
+      const restored = AgentStateMachine.restore(simpleRunbook, data)
+
+      // Continue from step 1 in Planning
+      restored.advanceStep() // complete step 1, phase complete → Implementation
+      expect(restored.getState()).toBe('Implementation')
+      expect(restored.getSnapshot().completedSteps).toBe(2)
+    })
+
+    it('does not emit events during restoration', () => {
+      const original = new AgentStateMachine(simpleRunbook)
+      original.transition('picking_card')
+      original.transition('Planning')
+      original.advanceStep()
+
+      const data = original.getRestoreData()
+
+      const events: string[] = []
+      const restored = AgentStateMachine.restore(simpleRunbook, data)
+      restored.on('state:changed', () => events.push('state:changed'))
+      restored.on('step:advanced', () => events.push('step:advanced'))
+      restored.on('step:completed', () => events.push('step:completed'))
+
+      // No events should have been captured (restore happened before listeners)
+      expect(events).toEqual([])
+    })
+
+    it('throws on out-of-bounds phaseIndex', () => {
+      const data = {
+        state: 'Planning',
+        phaseIndex: 99,
+        stepIndex: 0,
+        completedSteps: 0,
+        completedStepCounts: [0, 0, 0]
+      }
+      expect(() => AgentStateMachine.restore(simpleRunbook, data)).toThrow('out of bounds')
+    })
+
+    it('throws on mismatched completedStepCounts length', () => {
+      const data = {
+        state: 'Planning',
+        phaseIndex: 0,
+        stepIndex: 0,
+        completedSteps: 0,
+        completedStepCounts: [0] // wrong length
+      }
+      expect(() => AgentStateMachine.restore(simpleRunbook, data)).toThrow(
+        'does not match phases'
+      )
+    })
+
+    it('throws on out-of-bounds stepIndex', () => {
+      const data = {
+        state: 'Planning',
+        phaseIndex: 0,
+        stepIndex: 99,
+        completedSteps: 0,
+        completedStepCounts: [0, 0, 0]
+      }
+      expect(() => AgentStateMachine.restore(simpleRunbook, data)).toThrow('out of bounds')
+    })
+  })
+
   describe('getValidTransitions', () => {
     it('returns valid targets from idle', () => {
       const sm = new AgentStateMachine(simpleRunbook)

@@ -3,16 +3,27 @@ import type { Runbook } from '../shared/runbook'
 import type { WorktreeInfo } from '../shared/worktree'
 import type { CardInfo, AgentSnapshot, AgentManagerEvents } from '../shared/agent-manager'
 import type { AgentState, AgentStepProgress } from '../shared/agent-state'
+import type {
+  PersistedAgent,
+  StepCompletionRecord,
+  PendingHumanInteraction
+} from '../shared/agent-persistence'
 import { AgentStateMachine } from './agent-state-machine'
 import { createWorktree, removeWorktree } from './worktree-manager'
+import { saveAgent, removePersistedAgent } from './agent-persistence-service'
 import { TypedEventEmitter } from './typed-emitter'
 
 interface AgentEntry {
   id: string
   card: CardInfo
   worktree: WorktreeInfo
+  runbook: Runbook
   stateMachine: AgentStateMachine
   sessionId: string | null
+  stepHistory: StepCompletionRecord[]
+  pendingHumanInteraction: PendingHumanInteraction | null
+  createdAt: string
+  interruptedAt: string | null
 }
 
 /**
@@ -50,12 +61,52 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     }
 
     const id = randomUUID()
-    const entry: AgentEntry = { id, card, worktree, stateMachine, sessionId: null }
+    const entry: AgentEntry = {
+      id,
+      card,
+      worktree,
+      runbook,
+      stateMachine,
+      sessionId: null,
+      stepHistory: [],
+      pendingHumanInteraction: null,
+      createdAt: new Date().toISOString(),
+      interruptedAt: null
+    }
     this.agents.set(id, entry)
     this.wireStateMachineEvents(entry)
 
     this.emit('agent:created', this.snapshotOf(entry))
+    this.persistAgent(entry)
     return id
+  }
+
+  /**
+   * Restore an agent from persisted data.
+   *
+   * Reconstructs the state machine from the persisted runbook and restore data.
+   * Does NOT create a worktree (it already exists). Returns the agent ID.
+   */
+  restoreAgent(persisted: PersistedAgent): string {
+    const stateMachine = AgentStateMachine.restore(persisted.runbook, persisted.restoreData)
+
+    const entry: AgentEntry = {
+      id: persisted.id,
+      card: persisted.card,
+      worktree: persisted.worktree,
+      runbook: persisted.runbook,
+      stateMachine,
+      sessionId: persisted.sessionId,
+      stepHistory: persisted.stepHistory,
+      pendingHumanInteraction: persisted.pendingHumanInteraction,
+      createdAt: persisted.createdAt,
+      interruptedAt: persisted.interruptedAt
+    }
+    this.agents.set(persisted.id, entry)
+    this.wireStateMachineEvents(entry)
+
+    this.emit('agent:created', this.snapshotOf(entry))
+    return persisted.id
   }
 
   /**
@@ -90,6 +141,12 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
 
     this.agents.delete(agentId)
     this.emit('agent:destroyed', agentId)
+
+    try {
+      await removePersistedAgent(agentId)
+    } catch {
+      // Best-effort — don't fail the destroy
+    }
   }
 
   /** Get a snapshot of a single agent, or null if not found. */
@@ -117,6 +174,30 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     entry.sessionId = sessionId
   }
 
+  /** Set a summary on a completed step record. Called by the orchestration loop. */
+  setStepSummary(agentId: string, phaseIndex: number, stepIndex: number, summary: string): void {
+    const entry = this.agents.get(agentId)
+    if (!entry) throw new Error(`Unknown agent: ${agentId}`)
+    const record = entry.stepHistory.find(
+      (r) => r.phaseIndex === phaseIndex && r.stepIndex === stepIndex
+    )
+    if (record) {
+      record.summary = summary
+      this.persistAgent(entry)
+    }
+  }
+
+  /** Set or clear the pending human interaction for an agent. */
+  setPendingHumanInteraction(
+    agentId: string,
+    interaction: PendingHumanInteraction | null
+  ): void {
+    const entry = this.agents.get(agentId)
+    if (!entry) throw new Error(`Unknown agent: ${agentId}`)
+    entry.pendingHumanInteraction = interaction
+    this.persistAgent(entry)
+  }
+
   /** Number of active agents. */
   get size(): number {
     return this.agents.size
@@ -132,8 +213,35 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
       card: entry.card,
       worktree: entry.worktree,
       stateSnapshot: entry.stateMachine.getSnapshot(),
-      sessionId: entry.sessionId
+      sessionId: entry.sessionId,
+      stepHistory: entry.stepHistory,
+      pendingHumanInteraction: entry.pendingHumanInteraction,
+      createdAt: entry.createdAt,
+      interruptedAt: entry.interruptedAt
     }
+  }
+
+  private toPersistedAgent(entry: AgentEntry): PersistedAgent {
+    return {
+      id: entry.id,
+      card: entry.card,
+      worktree: entry.worktree,
+      runbook: entry.runbook,
+      stateSnapshot: entry.stateMachine.getSnapshot(),
+      restoreData: entry.stateMachine.getRestoreData(),
+      sessionId: entry.sessionId,
+      stepHistory: entry.stepHistory,
+      pendingHumanInteraction: entry.pendingHumanInteraction,
+      createdAt: entry.createdAt,
+      persistedAt: new Date().toISOString(),
+      interruptedAt: entry.interruptedAt
+    }
+  }
+
+  private persistAgent(entry: AgentEntry): void {
+    saveAgent(this.toPersistedAgent(entry)).catch((err) => {
+      console.error(`Failed to persist agent ${entry.id}:`, err)
+    })
   }
 
   /** Wire state machine events to re-emit as agent-level events. */
@@ -146,6 +254,8 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
       if (newState === 'done') {
         this.emit('agent:done', id)
       }
+
+      this.persistAgent(entry)
     })
 
     stateMachine.on('step:advanced', (progress: AgentStepProgress) => {
@@ -153,7 +263,16 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     })
 
     stateMachine.on('step:completed', (progress: AgentStepProgress) => {
+      entry.stepHistory.push({
+        phaseIndex: progress.phaseIndex,
+        stepIndex: progress.stepIndex,
+        phaseName: progress.phaseName,
+        stepTitle: progress.stepTitle,
+        completedAt: new Date().toISOString()
+      })
+
       this.emit('agent:step-completed', id, progress)
+      this.persistAgent(entry)
     })
 
     stateMachine.on('phase:completed', (phaseName: string, phaseIndex: number) => {

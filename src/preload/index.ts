@@ -41,7 +41,14 @@ const api = {
   removeWorktree: (repoPath: string, worktree: unknown): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.WORKTREE_REMOVE, repoPath, worktree),
   cleanupOrphanedWorktrees: (repoPath: string): Promise<unknown> =>
-    ipcRenderer.invoke(IpcChannels.WORKTREE_CLEANUP_ORPHANS, repoPath)
+    ipcRenderer.invoke(IpcChannels.WORKTREE_CLEANUP_ORPHANS, repoPath),
+
+  // Agent persistence
+  listAgents: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.AGENT_LIST),
+  getAgent: (agentId: string): Promise<unknown> =>
+    ipcRenderer.invoke(IpcChannels.AGENT_GET, agentId),
+  dismissAgent: (agentId: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.AGENT_DISMISS, agentId)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

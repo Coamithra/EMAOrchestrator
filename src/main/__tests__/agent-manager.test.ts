@@ -10,13 +10,21 @@ import type { WorktreeInfo } from '../../shared/worktree'
 
 const mockCreateWorktree = vi.hoisted(() => vi.fn())
 const mockRemoveWorktree = vi.hoisted(() => vi.fn())
+const mockSaveAgent = vi.hoisted(() => vi.fn())
+const mockRemovePersistedAgent = vi.hoisted(() => vi.fn())
 
 vi.mock('../worktree-manager', () => ({
   createWorktree: mockCreateWorktree,
   removeWorktree: mockRemoveWorktree
 }))
 
+vi.mock('../agent-persistence-service', () => ({
+  saveAgent: mockSaveAgent,
+  removePersistedAgent: mockRemovePersistedAgent
+}))
+
 import { AgentManager } from '../agent-manager'
+import type { PersistedAgent } from '../../shared/agent-persistence'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -54,12 +62,53 @@ function fakeWorktree(branch: string): WorktreeInfo {
 // Tests
 // ---------------------------------------------------------------------------
 
+function makePersistedAgent(overrides?: Partial<PersistedAgent>): PersistedAgent {
+  return {
+    id: 'restored-agent-1',
+    card: testCard,
+    worktree: fakeWorktree('feat-agent-manager'),
+    runbook: twoPhaseRunbook,
+    stateSnapshot: {
+      state: 'Research',
+      phaseIndex: 0,
+      stepIndex: 1,
+      totalPhases: 2,
+      totalSteps: 3,
+      completedSteps: 1
+    },
+    restoreData: {
+      state: 'Research',
+      phaseIndex: 0,
+      stepIndex: 1,
+      completedSteps: 1,
+      completedStepCounts: [1, 0]
+    },
+    sessionId: 'session-abc',
+    stepHistory: [
+      {
+        phaseIndex: 0,
+        stepIndex: 0,
+        phaseName: 'Research',
+        stepTitle: 'Read the code',
+        completedAt: '2026-03-25T10:00:00.000Z'
+      }
+    ],
+    pendingHumanInteraction: null,
+    createdAt: '2026-03-25T09:00:00.000Z',
+    persistedAt: '2026-03-25T10:00:00.000Z',
+    interruptedAt: null,
+    ...overrides
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockCreateWorktree.mockImplementation((_repo: string, branch: string) =>
     Promise.resolve(fakeWorktree(branch))
   )
   mockRemoveWorktree.mockResolvedValue(undefined)
+  mockSaveAgent.mockResolvedValue(undefined)
+  mockRemovePersistedAgent.mockResolvedValue(undefined)
 })
 
 describe('AgentManager', () => {
@@ -387,6 +436,152 @@ describe('AgentManager', () => {
       sm.setError('something broke')
 
       expect(errorHandler).toHaveBeenCalledWith(id, 'something broke')
+    })
+  })
+
+  describe('restoreAgent', () => {
+    it('restores an agent from persisted data', () => {
+      const mgr = new AgentManager()
+      const persisted = makePersistedAgent()
+
+      const id = mgr.restoreAgent(persisted)
+
+      expect(id).toBe('restored-agent-1')
+      expect(mgr.size).toBe(1)
+      const agent = mgr.getAgent(id)!
+      expect(agent.card).toEqual(testCard)
+      expect(agent.stateSnapshot.state).toBe('Research')
+      expect(agent.stateSnapshot.stepIndex).toBe(1)
+      expect(agent.stateSnapshot.completedSteps).toBe(1)
+      expect(agent.sessionId).toBe('session-abc')
+      expect(agent.stepHistory).toHaveLength(1)
+      expect(agent.interruptedAt).toBeNull()
+    })
+
+    it('restores an interrupted agent', () => {
+      const mgr = new AgentManager()
+      const persisted = makePersistedAgent({ interruptedAt: '2026-03-25T12:00:00.000Z' })
+
+      const id = mgr.restoreAgent(persisted)
+      expect(mgr.getAgent(id)!.interruptedAt).toBe('2026-03-25T12:00:00.000Z')
+    })
+
+    it('does not create a worktree', () => {
+      const mgr = new AgentManager()
+      mgr.restoreAgent(makePersistedAgent())
+
+      expect(mockCreateWorktree).not.toHaveBeenCalled()
+    })
+
+    it('emits agent:created', () => {
+      const mgr = new AgentManager()
+      const handler = vi.fn()
+      mgr.on('agent:created', handler)
+
+      mgr.restoreAgent(makePersistedAgent())
+
+      expect(handler).toHaveBeenCalledOnce()
+    })
+
+    it('restored agent state machine can continue advancing', () => {
+      const mgr = new AgentManager()
+      const id = mgr.restoreAgent(makePersistedAgent())
+      const sm = mgr.getStateMachine(id)!
+
+      // Currently at Research step 1. Advance to complete Research → Implement
+      sm.advanceStep()
+      expect(sm.getState()).toBe('Implement')
+    })
+  })
+
+  describe('persistence triggers', () => {
+    it('persists on agent creation', async () => {
+      const mgr = new AgentManager()
+      await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
+
+      expect(mockSaveAgent).toHaveBeenCalled()
+    })
+
+    it('persists on state change', async () => {
+      const mgr = new AgentManager()
+      const id = await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
+      mockSaveAgent.mockClear()
+
+      const sm = mgr.getStateMachine(id)!
+      sm.transition('picking_card')
+
+      expect(mockSaveAgent).toHaveBeenCalled()
+    })
+
+    it('persists on step completion and records history', async () => {
+      const mgr = new AgentManager()
+      const id = await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
+      const sm = mgr.getStateMachine(id)!
+      sm.transition('picking_card')
+      sm.transition('Research')
+      mockSaveAgent.mockClear()
+
+      sm.advanceStep()
+
+      // step:completed fires and saves
+      expect(mockSaveAgent).toHaveBeenCalled()
+      const agent = mgr.getAgent(id)!
+      expect(agent.stepHistory).toHaveLength(1)
+      expect(agent.stepHistory[0].stepTitle).toBe('Read the code')
+      expect(agent.stepHistory[0].completedAt).toBeTruthy()
+    })
+
+    it('removes persisted state on destroy', async () => {
+      const mgr = new AgentManager()
+      const id = await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
+
+      await mgr.destroyAgent(id, repoPath)
+
+      expect(mockRemovePersistedAgent).toHaveBeenCalledWith(id)
+    })
+  })
+
+  describe('setStepSummary', () => {
+    it('sets a summary on a completed step', async () => {
+      const mgr = new AgentManager()
+      const id = await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
+      const sm = mgr.getStateMachine(id)!
+
+      sm.transition('picking_card')
+      sm.transition('Research')
+      sm.advanceStep() // completes step 0
+
+      mgr.setStepSummary(id, 0, 0, 'Read the code and found the bug')
+
+      const agent = mgr.getAgent(id)!
+      expect(agent.stepHistory[0].summary).toBe('Read the code and found the bug')
+    })
+
+    it('throws for unknown agent', () => {
+      const mgr = new AgentManager()
+      expect(() => mgr.setStepSummary('nope', 0, 0, 'x')).toThrow('Unknown agent')
+    })
+  })
+
+  describe('setPendingHumanInteraction', () => {
+    it('sets and clears pending interaction', async () => {
+      const mgr = new AgentManager()
+      const id = await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
+
+      mgr.setPendingHumanInteraction(id, {
+        type: 'permission',
+        detail: 'Write to file.ts',
+        occurredAt: '2026-03-25T10:00:00.000Z'
+      })
+      expect(mgr.getAgent(id)!.pendingHumanInteraction).not.toBeNull()
+
+      mgr.setPendingHumanInteraction(id, null)
+      expect(mgr.getAgent(id)!.pendingHumanInteraction).toBeNull()
+    })
+
+    it('throws for unknown agent', () => {
+      const mgr = new AgentManager()
+      expect(() => mgr.setPendingHumanInteraction('nope', null)).toThrow('Unknown agent')
     })
   })
 

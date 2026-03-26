@@ -3,7 +3,8 @@ import type {
   AgentState,
   AgentStateMachineEvents,
   AgentStateSnapshot,
-  AgentStepProgress
+  AgentStepProgress,
+  StateMachineRestoreData
 } from '../shared/agent-state'
 import { TypedEventEmitter } from './typed-emitter'
 
@@ -33,6 +34,52 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
 
   /** Step completion tracking per phase: completedStepCounts[phaseIndex] = count. */
   private readonly completedStepCounts: number[]
+
+  /**
+   * Restore a state machine from persisted data. Constructs the machine
+   * from the runbook, then sets internal fields to match the restore data
+   * without emitting any events.
+   */
+  static restore(runbook: Runbook, data: StateMachineRestoreData): AgentStateMachine {
+    const machine = new AgentStateMachine(runbook)
+
+    // Validate restore data against runbook bounds
+    if (data.phaseIndex >= runbook.phases.length) {
+      throw new Error(
+        `Restore phaseIndex ${data.phaseIndex} out of bounds (${runbook.phases.length} phases)`
+      )
+    }
+    if (data.completedStepCounts.length !== runbook.phases.length) {
+      throw new Error(
+        `Restore completedStepCounts length ${data.completedStepCounts.length} does not match phases (${runbook.phases.length})`
+      )
+    }
+    if (
+      data.phaseIndex >= 0 &&
+      data.stepIndex >= runbook.phases[data.phaseIndex].steps.length
+    ) {
+      throw new Error(
+        `Restore stepIndex ${data.stepIndex} out of bounds for phase "${runbook.phases[data.phaseIndex].name}" (${runbook.phases[data.phaseIndex].steps.length} steps)`
+      )
+    }
+
+    // Set internal fields directly — no events emitted
+    machine.state = data.state
+    machine.phaseIndex = data.phaseIndex
+    machine.stepIndex = data.stepIndex
+    machine.completedSteps = data.completedSteps
+    for (let i = 0; i < data.completedStepCounts.length; i++) {
+      machine.completedStepCounts[i] = data.completedStepCounts[i]
+    }
+    machine.errorMessage = data.error
+
+    // Restore waiting-for-human save slots
+    machine.stateBeforeWaiting = data.stateBeforeWaiting
+    machine.phaseIndexBeforeWaiting = data.phaseIndexBeforeWaiting
+    machine.stepIndexBeforeWaiting = data.stepIndexBeforeWaiting
+
+    return machine
+  }
 
   constructor(private readonly runbook: Runbook) {
     super()
@@ -126,6 +173,27 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
 
   getPhaseNames(): string[] {
     return [...this.phaseNames]
+  }
+
+  /** Return all data needed to persist and later restore this state machine. */
+  getRestoreData(): StateMachineRestoreData {
+    return {
+      state: this.state,
+      phaseIndex: this.phaseIndex,
+      stepIndex: this.stepIndex,
+      completedSteps: this.completedSteps,
+      completedStepCounts: [...this.completedStepCounts],
+      ...(this.errorMessage ? { error: this.errorMessage } : {}),
+      ...(this.stateBeforeWaiting !== undefined
+        ? { stateBeforeWaiting: this.stateBeforeWaiting }
+        : {}),
+      ...(this.phaseIndexBeforeWaiting !== undefined
+        ? { phaseIndexBeforeWaiting: this.phaseIndexBeforeWaiting }
+        : {}),
+      ...(this.stepIndexBeforeWaiting !== undefined
+        ? { stepIndexBeforeWaiting: this.stepIndexBeforeWaiting }
+        : {})
+    }
   }
 
   // ---------------------------------------------------------------------------

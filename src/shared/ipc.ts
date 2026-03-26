@@ -11,6 +11,7 @@ import type {
   AssistantContent
 } from './cli-driver'
 import type { WorktreeInfo } from './worktree'
+import type { AgentSnapshot } from './agent-manager'
 
 // ---------------------------------------------------------------------------
 // IPC Channel Constants
@@ -39,7 +40,12 @@ export const IpcChannels = {
   WORKTREE_CREATE: 'worktree:create',
   WORKTREE_LIST: 'worktree:list',
   WORKTREE_REMOVE: 'worktree:remove',
-  WORKTREE_CLEANUP_ORPHANS: 'worktree:cleanupOrphans'
+  WORKTREE_CLEANUP_ORPHANS: 'worktree:cleanupOrphans',
+
+  // Agent persistence
+  AGENT_LIST: 'agent:list',
+  AGENT_GET: 'agent:get',
+  AGENT_DISMISS: 'agent:dismiss'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -82,4 +88,11 @@ export interface AgentAPI {
   listWorktrees(repoPath: string): Promise<WorktreeInfo[]>
   removeWorktree(repoPath: string, worktree: WorktreeInfo): Promise<void>
   cleanupOrphanedWorktrees(repoPath: string): Promise<WorktreeInfo[]>
+}
+
+/** Agent persistence API exposed to the renderer. */
+export interface PersistenceAPI {
+  listAgents(): Promise<AgentSnapshot[]>
+  getAgent(agentId: string): Promise<AgentSnapshot | null>
+  dismissAgent(agentId: string): Promise<void>
 }
