@@ -48,14 +48,14 @@ export const IpcChannels = {
 
 /** Discriminated union of all CLI events pushed from main to renderer. */
 export type CliEvent =
-  | { event: 'state:changed'; data: { state: CliDriverState; previousState: CliDriverState } }
-  | { event: 'session:init'; data: SessionInfo }
-  | { event: 'stream:text'; data: StreamTextDelta }
-  | { event: 'assistant:message'; data: AssistantContent }
-  | { event: 'permission:request'; data: PermissionRequest }
-  | { event: 'user:question'; data: UserQuestionRequest }
-  | { event: 'session:result'; data: SessionResult }
-  | { event: 'error'; data: { message: string } }
+  | { type: 'state:changed'; data: { state: CliDriverState; previousState: CliDriverState } }
+  | { type: 'session:init'; data: SessionInfo }
+  | { type: 'stream:text'; data: StreamTextDelta }
+  | { type: 'assistant:message'; data: AssistantContent }
+  | { type: 'permission:request'; data: PermissionRequest }
+  | { type: 'user:question'; data: UserQuestionRequest }
+  | { type: 'session:result'; data: SessionResult }
+  | { type: 'error'; data: { message: string } }
 
 /** Payload shape for the cli:event channel. */
 export interface CliEventPayload {
@@ -75,8 +75,7 @@ export interface AgentAPI {
   getSessionState(sessionId: string): Promise<CliDriverState | null>
   respondToPermission(sessionId: string, response: PermissionResponse): Promise<void>
   respondToQuestion(sessionId: string, response: UserQuestionResponse): Promise<void>
-  onCliEvent(callback: (payload: CliEventPayload) => void): void
-  offCliEvent(): void
+  onCliEvent(callback: (payload: CliEventPayload) => void): () => void
 
   // Worktrees
   createWorktree(repoPath: string, branch: string): Promise<WorktreeInfo>

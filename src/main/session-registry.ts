@@ -7,7 +7,11 @@ import { IpcChannels } from '../shared/ipc'
 
 const sessions = new Map<string, CliDriver>()
 
-/** Get the main BrowserWindow (for pushing events to the renderer). */
+/**
+ * Get the main BrowserWindow for pushing events. Uses getAllWindows()[0] which
+ * is correct for our single-window app. If multi-window support is added later,
+ * this should accept a webContents reference from the IPC event sender instead.
+ */
 function getWindow(): BrowserWindow | null {
   const windows = BrowserWindow.getAllWindows()
   return windows[0] ?? null
@@ -24,37 +28,37 @@ function pushEvent(payload: CliEventPayload): void {
 /** Wire up all CliDriver events to forward to the renderer. */
 function wireEvents(sessionId: string, driver: CliDriver): void {
   driver.on('state:changed', (state, previousState) => {
-    pushEvent({ sessionId, event: { event: 'state:changed', data: { state, previousState } } })
+    pushEvent({ sessionId, event: { type: 'state:changed', data: { state, previousState } } })
   })
 
   driver.on('session:init', (info) => {
-    pushEvent({ sessionId, event: { event: 'session:init', data: info } })
+    pushEvent({ sessionId, event: { type: 'session:init', data: info } })
   })
 
   driver.on('stream:text', (delta) => {
-    pushEvent({ sessionId, event: { event: 'stream:text', data: delta } })
+    pushEvent({ sessionId, event: { type: 'stream:text', data: delta } })
   })
 
   driver.on('assistant:message', (content) => {
-    pushEvent({ sessionId, event: { event: 'assistant:message', data: content } })
+    pushEvent({ sessionId, event: { type: 'assistant:message', data: content } })
   })
 
   driver.on('permission:request', (request) => {
-    pushEvent({ sessionId, event: { event: 'permission:request', data: request } })
+    pushEvent({ sessionId, event: { type: 'permission:request', data: request } })
   })
 
   driver.on('user:question', (request) => {
-    pushEvent({ sessionId, event: { event: 'user:question', data: request } })
+    pushEvent({ sessionId, event: { type: 'user:question', data: request } })
   })
 
   driver.on('session:result', (result) => {
-    pushEvent({ sessionId, event: { event: 'session:result', data: result } })
+    pushEvent({ sessionId, event: { type: 'session:result', data: result } })
     // Auto-remove session after completion
     sessions.delete(sessionId)
   })
 
   driver.on('error', (error) => {
-    pushEvent({ sessionId, event: { event: 'error', data: { message: error.message } } })
+    pushEvent({ sessionId, event: { type: 'error', data: { message: error.message } } })
     // Auto-remove session after error
     sessions.delete(sessionId)
   })
@@ -63,6 +67,11 @@ function wireEvents(sessionId: string, driver: CliDriver): void {
 /**
  * Create a new CLI session. Returns the session ID immediately;
  * the session runs in the background, pushing events to the renderer.
+ *
+ * Note: Events may begin firing before the session ID is returned to the
+ * renderer via IPC. This is safe because Electron serializes IPC messages
+ * through the same pipe, so the invoke response arrives before any
+ * webContents.send payloads.
  */
 export function createSession(options: CliSessionOptions): string {
   const sessionId = randomUUID()
@@ -84,7 +93,7 @@ export function getSession(sessionId: string): CliDriver | null {
   return sessions.get(sessionId) ?? null
 }
 
-/** Abort all active sessions (e.g., on app quit). */
+/** Abort all active sessions. Cleanup is best-effort on quit — async finally blocks may not complete. */
 export function abortAllSessions(): void {
   for (const driver of sessions.values()) {
     driver.abort()
