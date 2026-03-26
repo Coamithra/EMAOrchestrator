@@ -20,6 +20,14 @@
 
 **Full decision doc:** `docs/spike-003-cli-interaction-model.md`
 
+### Context Strategy for Multi-Step Prompts (Spike #009)
+
+**Decision:** Use a single long-lived SDK session per agent. Each runbook step is sent as a new prompt within the same conversation — prior-step context is already in Claude's memory. No manual context injection, summarization, or sliding window needed. The SDK's built-in auto-compaction handles the edge case where context approaches the 1M token limit.
+
+**Why not inject context?** With 1M native context on Claude 4.6 and SDK auto-compaction as a safety net, manually managing context is unnecessary complexity. A 29-step runbook at ~20K tokens/step fits comfortably (~580K tokens).
+
+**Full decision doc:** `docs/spike-009-context-strategy.md`
+
 ## Architecture
 
 Central controller pattern: orchestrator parses the runbook into discrete steps, spawns one Claude CLI session per Trello card (each in its own git worktree), feeds step-specific prompts, detects completion, and advances automatically.
