@@ -62,11 +62,39 @@ function App(): React.JSX.Element {
           setAgents((prev) => prev.filter((a) => a.id !== event.data.agentId))
           break
 
-        // step-advanced, step-completed, phase-completed, error, and done are
-        // already covered by the state-changed event which carries the full
-        // snapshot. No additional patching needed.
+        // Append a step completion record so the progress panel updates immediately.
+        case 'agent:step-completed': {
+          const { agentId, progress } = event.data
+          setAgents((prev) =>
+            prev.map((a) => {
+              if (a.id !== agentId) return a
+              // Avoid duplicates (idempotency for replayed events)
+              const exists = a.stepHistory.some(
+                (r) =>
+                  r.phaseIndex === progress.phaseIndex && r.stepIndex === progress.stepIndex
+              )
+              if (exists) return a
+              return {
+                ...a,
+                stepHistory: [
+                  ...a.stepHistory,
+                  {
+                    phaseIndex: progress.phaseIndex,
+                    stepIndex: progress.stepIndex,
+                    phaseName: progress.phaseName,
+                    stepTitle: progress.stepTitle,
+                    completedAt: new Date().toISOString()
+                  }
+                ]
+              }
+            })
+          )
+          break
+        }
+
+        // step-advanced, phase-completed, error, and done are already covered
+        // by the state-changed event which carries the full snapshot.
         case 'agent:step-advanced':
-        case 'agent:step-completed':
         case 'agent:phase-completed':
         case 'agent:error':
         case 'agent:done':

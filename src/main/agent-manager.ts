@@ -214,6 +214,7 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
       id: entry.id,
       card: entry.card,
       worktree: entry.worktree,
+      runbook: entry.runbook,
       stateSnapshot: entry.stateMachine.getSnapshot(),
       sessionId: entry.sessionId,
       stepHistory: entry.stepHistory,

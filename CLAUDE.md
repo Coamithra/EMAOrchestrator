@@ -157,6 +157,15 @@ Central definition of all IPC channel constants and the renderer API type.
 - **`AgentAPI`** — TypeScript interface for the CLI/worktree portion of the preload API.
 - **`OrchestrationAPI`** — TypeScript interface for the orchestration loop portion of the preload API.
 
+### Agent Detail Panel (`src/renderer/src/components/AgentDetailPanel.tsx`)
+
+Main panel for viewing a selected agent's state and output. Composes two sub-components:
+
+- **`TerminalView`** (`src/renderer/src/components/TerminalView.tsx`) — xterm.js wrapper that renders streaming CLI output. Subscribes to `cli:event` IPC channel, filtering by session ID `orchestration-<agentId>`. Writes `stream:text` deltas to the terminal. Uses `@xterm/addon-fit` with a ResizeObserver for responsive sizing. Terminal instance is created/disposed per agent ID change.
+- **`StepProgress`** (`src/renderer/src/components/StepProgress.tsx`) — Collapsible phase/step progress indicator. Shows each runbook phase with expand/collapse, and each step with status icons (pending/running/done) and completion summaries. Current active phase auto-expands. Derives state from `AgentStateSnapshot` + `StepCompletionRecord[]` + the agent's `Runbook`.
+- **Header:** Card name, phase/step label, and a "waiting for input" badge when `pendingHumanInteraction` is set.
+- **`AgentSnapshot.runbook`:** The full `Runbook` is included in `AgentSnapshot` so the renderer has phase/step names without an extra IPC call.
+
 ## Development Workflow
 
 **Every Trello card must follow the runbook in [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).** This is a 6-phase, 29-step process: pick up → research → design → implement → verify → review & ship. No skipping phases. Create a tracker doc before starting.

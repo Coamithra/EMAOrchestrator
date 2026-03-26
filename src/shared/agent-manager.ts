@@ -1,6 +1,7 @@
 import type { AgentStateSnapshot, AgentStepProgress } from './agent-state'
 import type { StepCompletionRecord, PendingHumanInteraction } from './agent-persistence'
 import type { WorktreeInfo } from './worktree'
+import type { Runbook } from './runbook'
 
 /** Trello card info needed to create an agent. */
 export interface CardInfo {
@@ -14,6 +15,7 @@ export interface AgentSnapshot {
   id: string
   card: CardInfo
   worktree: WorktreeInfo
+  runbook: Runbook
   stateSnapshot: AgentStateSnapshot
   sessionId: string | null
   stepHistory: StepCompletionRecord[]

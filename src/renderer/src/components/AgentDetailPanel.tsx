@@ -1,8 +1,30 @@
 import type { AgentSnapshot } from '@shared/agent-manager'
+import TerminalView from './TerminalView'
+import StepProgress from './StepProgress'
+import type { PhaseInfo } from './StepProgress'
 import './AgentDetailPanel.css'
 
 interface AgentDetailPanelProps {
   agent: AgentSnapshot | null
+}
+
+function toPhaseInfos(agent: AgentSnapshot): PhaseInfo[] {
+  return agent.runbook.phases.map((phase) => ({
+    name: phase.name,
+    steps: phase.steps.map((step) => ({ title: step.title }))
+  }))
+}
+
+function getStateLabel(agent: AgentSnapshot): string {
+  const { stateSnapshot } = agent
+  if (stateSnapshot.state === 'done') return 'Done'
+  if (stateSnapshot.state === 'error') return stateSnapshot.error || 'Error'
+  if (stateSnapshot.state === 'idle') return 'Idle'
+  if (stateSnapshot.state === 'waiting_for_human') return 'Waiting for input'
+  if (stateSnapshot.phaseIndex >= 0) {
+    return `Phase ${stateSnapshot.phaseIndex + 1} of ${stateSnapshot.totalPhases} \u2014 Step ${stateSnapshot.stepIndex + 1} of ${stateSnapshot.totalSteps}`
+  }
+  return String(stateSnapshot.state)
 }
 
 function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
@@ -14,20 +36,34 @@ function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
     )
   }
 
-  const { stateSnapshot } = agent
-  const stateLabel =
-    stateSnapshot.phaseIndex >= 0
-      ? `Phase ${stateSnapshot.phaseIndex + 1} of ${stateSnapshot.totalPhases} — Step ${stateSnapshot.stepIndex + 1} of ${stateSnapshot.totalSteps}`
-      : String(stateSnapshot.state)
+  const phases = toPhaseInfos(agent)
 
   return (
     <div className="agent-detail-panel">
       <div className="agent-detail-panel__header">
-        <div className="agent-detail-panel__card-name">{agent.card.name}</div>
-        <div className="agent-detail-panel__state">{stateLabel}</div>
+        <div className="agent-detail-panel__header-left">
+          <div className="agent-detail-panel__card-name">{agent.card.name}</div>
+          <div className="agent-detail-panel__state">{getStateLabel(agent)}</div>
+        </div>
+        {agent.pendingHumanInteraction && (
+          <div className="agent-detail-panel__waiting-badge">
+            {agent.pendingHumanInteraction.type === 'permission'
+              ? 'Permission required'
+              : 'Question pending'}
+          </div>
+        )}
       </div>
       <div className="agent-detail-panel__body">
-        Terminal and progress views will be added by cards #017–#018
+        <div className="agent-detail-panel__progress">
+          <StepProgress
+            stateSnapshot={agent.stateSnapshot}
+            stepHistory={agent.stepHistory}
+            phases={phases}
+          />
+        </div>
+        <div className="agent-detail-panel__terminal">
+          <TerminalView agentId={agent.id} />
+        </div>
       </div>
     </div>
   )

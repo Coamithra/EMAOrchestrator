@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .agent-detail-panel__empty {
@@ -14,29 +14,64 @@
   font-size: 14px;
 }
 
+/* Header */
 .agent-detail-panel__header {
-  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--ev-c-gray-3);
+  flex-shrink: 0;
+}
+
+.agent-detail-panel__header-left {
+  min-width: 0;
 }
 
 .agent-detail-panel__card-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ev-c-text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-detail-panel__state {
   font-size: 12px;
   color: var(--ev-c-text-2);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
+.agent-detail-panel__waiting-badge {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  margin-left: 12px;
+}
+
+/* Body: progress sidebar + terminal */
 .agent-detail-panel__body {
   flex: 1;
-  padding: 20px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ev-c-text-3);
-  font-size: 13px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agent-detail-panel__progress {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--ev-c-gray-3);
+  overflow-y: auto;
+}
+
+.agent-detail-panel__terminal {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  padding: 8px;
 }
