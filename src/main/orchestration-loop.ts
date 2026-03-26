@@ -47,7 +47,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
   constructor(
     private readonly agentManager: AgentManager,
     maxConcurrentAgents = 3,
-    private stuckTimeoutMs = 10 * 60 * 1000
+    private stuckTimeoutMs = 10 * 60 * 1000,
+    private stuckCheckIntervalMs = 60_000
   ) {
     super()
     this.maxConcurrentAgents = maxConcurrentAgents
@@ -110,6 +111,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     if (!entry?.driver) return // agent was stopped or has no active session
 
     entry.driver.respondToPermission(response)
+    entry.lastActivityAt = Date.now()
+    entry.stuckNotified = false
 
     const sm = this.agentManager.getStateMachine(agentId)
     if (sm?.getState() === 'waiting_for_human') {
@@ -127,6 +130,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     if (!entry?.driver) return // agent was stopped or has no active session
 
     await entry.driver.respondToUserQuestion(response)
+    entry.lastActivityAt = Date.now()
+    entry.stuckNotified = false
 
     const sm = this.agentManager.getStateMachine(agentId)
     if (sm?.getState() === 'waiting_for_human') {
@@ -493,7 +498,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         entry.stuckNotified = true
         this.emit('agent:stuck', entry.agentId, elapsed)
       }
-    }, 60_000) // check every minute
+    }, this.stuckCheckIntervalMs)
   }
 
   private stopStuckWatchdog(entry: RunningAgent): void {

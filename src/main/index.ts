@@ -150,7 +150,11 @@ app.whenReady().then(async () => {
   })
 
   const config = await loadConfig()
-  orchestrationLoop = new OrchestrationLoop(agentManager, config?.maxConcurrentAgents)
+  orchestrationLoop = new OrchestrationLoop(
+    agentManager,
+    config?.maxConcurrentAgents,
+    (config?.stuckAgentTimeoutMinutes ?? 10) * 60 * 1000
+  )
 
   registerIpcHandlers(agentManager, orchestrationLoop)
   wireAgentEventForwarding()

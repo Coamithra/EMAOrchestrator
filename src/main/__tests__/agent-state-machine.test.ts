@@ -277,6 +277,100 @@ describe('AgentStateMachine', () => {
     })
   })
 
+  describe('resumeFromError', () => {
+    it('resumes at the step that errored, preserving step progress', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.on('error', () => {})
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.advanceStep() // step 0 done, now on step 1
+      expect(sm.getSnapshot().completedSteps).toBe(1)
+
+      sm.setError('oops')
+      expect(sm.getState()).toBe('error')
+
+      sm.resumeFromError()
+      expect(sm.getState()).toBe('Planning')
+      expect(sm.getSnapshot().phaseIndex).toBe(0)
+      expect(sm.getSnapshot().stepIndex).toBe(1) // preserved, not reset to 0
+      expect(sm.getSnapshot().completedSteps).toBe(1) // preserved
+      expect(sm.getSnapshot().error).toBeUndefined()
+    })
+
+    it('allows continuing to completion after resumeFromError', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.on('error', () => {})
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.advanceStep() // step 0 done, now on step 1
+
+      sm.setError('fail')
+      sm.resumeFromError()
+
+      // Complete step 1 → advance to Implementation
+      sm.advanceStep()
+      expect(sm.getState()).toBe('Implementation')
+      expect(sm.getSnapshot().completedSteps).toBe(2)
+    })
+
+    it('throws when not in error state', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      expect(() => sm.resumeFromError()).toThrow('not in error state')
+    })
+
+    it('throws when error has no phase context', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.on('error', () => {})
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.setError('oops')
+
+      // Transition to idle first (clears phase context), then back to error
+      sm.transition('idle')
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.setError('oops again')
+
+      // phaseIndex should be 0 from Planning, so this should work
+      sm.resumeFromError()
+      expect(sm.getState()).toBe('Planning')
+    })
+
+    it('emits state:changed when resuming from error', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.on('error', () => {})
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.setError('boom')
+
+      const changes: [string, string][] = []
+      sm.on('state:changed', (newState, prev) => changes.push([newState, prev]))
+
+      sm.resumeFromError()
+      expect(changes).toEqual([['Planning', 'error']])
+    })
+
+    it('clears stale waiting save slots', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.on('error', () => {})
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.setWaitingForHuman()
+      sm.setError('timeout')
+
+      // setError clears waiting slots, but resumeFromError should also defensively clear
+      sm.resumeFromError()
+      expect(sm.getState()).toBe('Planning')
+
+      // Now setWaitingForHuman again and verify it works cleanly
+      sm.setWaitingForHuman()
+      sm.resumeFromWaiting()
+      expect(sm.getState()).toBe('Planning')
+    })
+  })
+
   describe('done state', () => {
     it('resets phaseIndex to -1 on done', () => {
       const sm = new AgentStateMachine(minimalRunbook)

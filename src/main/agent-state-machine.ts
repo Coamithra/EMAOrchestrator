@@ -344,7 +344,8 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
 
   /**
    * Resume from error state back to the phase where the error occurred,
-   * without resetting step tracking. Used for restart-from-last-step.
+   * without resetting step tracking. Resumes at the step that was in
+   * progress when the error occurred.
    * Throws if not currently in error state or if there's no phase to resume to.
    */
   resumeFromError(): void {
@@ -358,6 +359,10 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
     const previous = this.state
     this.state = this.phaseNames[this.phaseIndex]
     this.errorMessage = undefined
+    // Defensively clear stale waiting save slots
+    this.stateBeforeWaiting = undefined
+    this.phaseIndexBeforeWaiting = undefined
+    this.stepIndexBeforeWaiting = undefined
     this.emit('state:changed', this.state, previous)
   }
 

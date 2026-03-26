@@ -279,6 +279,131 @@ describe('OrchestrationLoop', () => {
       const agent = manager.getAgent(agentId)
       expect(agent?.stateSnapshot.state).toBe('error')
     })
+
+    it('resumes from the errored step on restart (not from step 0)', async () => {
+      const { manager, agentId } = await setupAgent()
+      const loop = new OrchestrationLoop(manager)
+
+      // First step succeeds, second step errors
+      let callCount = 0
+      mockStartSession.mockImplementation(async function (this: {
+        emit: (event: string, ...args: unknown[]) => void
+      }) {
+        callCount++
+        if (callCount === 1) {
+          // Step 1 succeeds
+          this.emit('session:init', { sessionId: 'sdk-1', model: 'claude-opus-4-6', tools: [] })
+          this.emit('assistant:message', { text: 'Done.', toolUses: [] })
+          this.emit('session:result', {
+            subtype: 'success',
+            sessionId: 'sdk-1',
+            costUsd: 0.01,
+            numTurns: 1,
+            durationMs: 1000
+          })
+        } else if (callCount === 2) {
+          // Step 2 errors
+          this.emit('error', new Error('CLI crash'))
+        } else {
+          // After restart: steps succeed
+          this.emit('session:init', { sessionId: 'sdk-2', model: 'claude-opus-4-6', tools: [] })
+          this.emit('assistant:message', { text: 'Resumed.', toolUses: [] })
+          this.emit('session:result', {
+            subtype: 'success',
+            sessionId: 'sdk-2',
+            costUsd: 0.01,
+            numTurns: 1,
+            durationMs: 1000
+          })
+        }
+      })
+
+      // Run until error. Wait for both the error event AND cleanup (.finally)
+      const errored = new Promise<void>((resolve) => {
+        loop.on('agent:errored', () => resolve())
+      })
+      loop.startAgent(agentId)
+      await errored
+
+      // Wait a tick for the .finally() cleanup to complete (removes from running map)
+      await new Promise((r) => setTimeout(r, 10))
+
+      const erroredAgent = manager.getAgent(agentId)
+      expect(erroredAgent?.stateSnapshot.state).toBe('error')
+      // Should have completed 1 step before erroring
+      expect(erroredAgent?.stepHistory.length).toBe(1)
+
+      // Restart the agent — should resume at step 2, not step 1
+      const completed = new Promise<void>((resolve) => {
+        loop.on('agent:completed', () => resolve())
+      })
+      loop.startAgent(agentId)
+      await completed
+
+      const doneAgent = manager.getAgent(agentId)
+      expect(doneAgent?.stateSnapshot.state).toBe('done')
+      // callCount should be: 1 (step1) + 1 (step2 error) + 2 (step2 retry + step3) = 4
+      // Step1 succeeded, step2 errored, restart runs step2 again + step3
+      expect(mockStartSession).toHaveBeenCalledTimes(4)
+    })
+  })
+
+  describe('stuck agent detection', () => {
+    it('emits agent:stuck after the configured timeout', async () => {
+      const { manager, agentId } = await setupAgent()
+      // 100ms timeout, 50ms check interval for fast testing
+      const loop = new OrchestrationLoop(manager, 3, 100, 50)
+
+      // Session hangs (no events emitted after start)
+      mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      const stuckPromise = new Promise<{ agentId: string; elapsed: number }>((resolve) => {
+        loop.on('agent:stuck', (id, elapsed) => resolve({ agentId: id, elapsed }))
+      })
+
+      loop.startAgent(agentId)
+
+      const result = await stuckPromise
+      expect(result.agentId).toBe(agentId)
+      expect(result.elapsed).toBeGreaterThanOrEqual(100)
+
+      loop.stopAgent(agentId)
+    })
+
+    it('does not emit stuck when activity resets the timer', async () => {
+      const { manager, agentId } = await setupAgent()
+      const loop = new OrchestrationLoop(manager, 3, 200, 50)
+
+      let stuckEmitted = false
+      loop.on('agent:stuck', () => { stuckEmitted = true })
+
+      // Session emits activity every 50ms (within the 200ms timeout)
+      mockStartSession.mockImplementation(async function (this: {
+        emit: (event: string, ...args: unknown[]) => void
+      }) {
+        for (let i = 0; i < 5; i++) {
+          await new Promise((r) => setTimeout(r, 50))
+          this.emit('stream:text', { text: '.' })
+        }
+        this.emit('session:result', {
+          subtype: 'success',
+          sessionId: 'sdk-1',
+          costUsd: 0.01,
+          numTurns: 1,
+          durationMs: 250
+        })
+      })
+
+      const completed = new Promise<void>((resolve) => {
+        loop.on('agent:completed', () => resolve())
+        loop.on('agent:errored', () => resolve())
+      })
+
+      loop.startAgent(agentId)
+      await completed
+
+      expect(stuckEmitted).toBe(false)
+    })
   })
 
   describe('stopAgent', () => {

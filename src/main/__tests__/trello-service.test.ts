@@ -125,14 +125,41 @@ describe('moveCard', () => {
     expect(options.method).toBe('PUT')
   })
 
-  it('returns false on HTTP error', async () => {
+  it('returns false on 4xx client error without retrying', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 400 })
     expect(await moveCard('card1', 'list2', creds)).toBe(false)
+    expect(mockFetch).toHaveBeenCalledOnce() // no retry
   })
 
-  it('returns false on network error', async () => {
-    mockFetch.mockRejectedValue(new Error('network'))
-    expect(await moveCard('card1', 'list2', creds)).toBe(false)
+  it('retries on 5xx server error and succeeds on second attempt', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+      .mockResolvedValueOnce({ ok: true })
+
+    const result = await moveCard('card1', 'list2', creds)
+    expect(result).toBe(true)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries on network error up to 3 times total', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockRejectedValueOnce(new Error('timeout'))
+
+    const result = await moveCard('card1', 'list2', creds)
+    expect(result).toBe(false)
+    expect(mockFetch).toHaveBeenCalledTimes(3)
+  })
+
+  it('returns true if a retry succeeds after initial failure', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ ok: true })
+
+    const result = await moveCard('card1', 'list2', creds)
+    expect(result).toBe(true)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -153,13 +180,29 @@ describe('addComment', () => {
     expect(options.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
   })
 
-  it('returns false on HTTP error', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 500 })
+  it('returns false on 4xx client error without retrying', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 422 })
     expect(await addComment('card1', 'test', creds)).toBe(false)
+    expect(mockFetch).toHaveBeenCalledOnce()
   })
 
-  it('returns false on network error', async () => {
-    mockFetch.mockRejectedValue(new Error('network'))
+  it('retries on 5xx and returns false after all attempts fail', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+
     expect(await addComment('card1', 'test', creds)).toBe(false)
+    expect(mockFetch).toHaveBeenCalledTimes(3)
+  })
+
+  it('retries on network error and succeeds on third attempt', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new Error('network'))
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ ok: true })
+
+    expect(await addComment('card1', 'test', creds)).toBe(true)
+    expect(mockFetch).toHaveBeenCalledTimes(3)
   })
 })
