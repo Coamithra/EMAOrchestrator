@@ -43,7 +43,11 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
   static restore(runbook: Runbook, data: StateMachineRestoreData): AgentStateMachine {
     const machine = new AgentStateMachine(runbook)
 
-    // Validate restore data against runbook bounds
+    // Validate restore data against runbook
+    const allValidStates = new Set([...FIXED_STATES, ...machine.phaseNames])
+    if (!allValidStates.has(data.state)) {
+      throw new Error(`Restore state "${data.state}" is not a valid state`)
+    }
     if (data.phaseIndex >= runbook.phases.length) {
       throw new Error(
         `Restore phaseIndex ${data.phaseIndex} out of bounds (${runbook.phases.length} phases)`

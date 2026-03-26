@@ -453,7 +453,7 @@ describe('AgentManager', () => {
       expect(agent.stateSnapshot.state).toBe('Research')
       expect(agent.stateSnapshot.stepIndex).toBe(1)
       expect(agent.stateSnapshot.completedSteps).toBe(1)
-      expect(agent.sessionId).toBe('session-abc')
+      expect(agent.sessionId).toBeNull() // CLI sessions don't survive restarts
       expect(agent.stepHistory).toHaveLength(1)
       expect(agent.interruptedAt).toBeNull()
     })

@@ -473,6 +473,17 @@ describe('AgentStateMachine', () => {
       expect(events).toEqual([])
     })
 
+    it('throws on invalid state name', () => {
+      const data = {
+        state: 'nonexistent-state',
+        phaseIndex: -1,
+        stepIndex: -1,
+        completedSteps: 0,
+        completedStepCounts: [0, 0, 0]
+      }
+      expect(() => AgentStateMachine.restore(simpleRunbook, data)).toThrow('not a valid state')
+    })
+
     it('throws on out-of-bounds phaseIndex', () => {
       const data = {
         state: 'Planning',

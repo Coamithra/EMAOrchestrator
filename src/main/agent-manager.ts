@@ -96,7 +96,7 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
       worktree: persisted.worktree,
       runbook: persisted.runbook,
       stateMachine,
-      sessionId: persisted.sessionId,
+      sessionId: null, // CLI sessions don't survive restarts
       stepHistory: persisted.stepHistory,
       pendingHumanInteraction: persisted.pendingHumanInteraction,
       createdAt: persisted.createdAt,

@@ -18,7 +18,7 @@ import type {
 import type { WorktreeInfo } from '../shared/worktree'
 import { IpcChannels } from '../shared/ipc'
 
-export function registerIpcHandlers(agentManager?: AgentManager): void {
+export function registerIpcHandlers(agentManager: AgentManager): void {
   // ---------------------------------------------------------------------------
   // Config
   // ---------------------------------------------------------------------------
@@ -128,7 +128,8 @@ export function registerIpcHandlers(agentManager?: AgentManager): void {
   )
 
   ipcMain.handle(IpcChannels.WORKTREE_CLEANUP_ORPHANS, async (_event, repoPath: string) => {
-    return await cleanupOrphanedWorktrees(repoPath)
+    const knownPaths = new Set(agentManager.listAgents().map((a) => a.worktree.path))
+    return await cleanupOrphanedWorktrees(repoPath, knownPaths)
   })
 
   // ---------------------------------------------------------------------------
@@ -136,14 +137,23 @@ export function registerIpcHandlers(agentManager?: AgentManager): void {
   // ---------------------------------------------------------------------------
 
   ipcMain.handle(IpcChannels.AGENT_LIST, () => {
-    return agentManager?.listAgents() ?? []
+    return agentManager.listAgents()
   })
 
   ipcMain.handle(IpcChannels.AGENT_GET, (_event, agentId: string) => {
-    return agentManager?.getAgent(agentId) ?? null
+    return agentManager.getAgent(agentId)
   })
 
   ipcMain.handle(IpcChannels.AGENT_DISMISS, async (_event, agentId: string) => {
+    const agent = agentManager.getAgent(agentId)
+    if (agent) {
+      const config = await loadConfig()
+      if (config?.targetRepoPath) {
+        await agentManager.destroyAgent(agentId, config.targetRepoPath)
+        return // destroyAgent already calls removePersistedAgent
+      }
+    }
+    // Agent not in memory (stale) — just remove from disk
     await removePersistedAgent(agentId)
   })
 }

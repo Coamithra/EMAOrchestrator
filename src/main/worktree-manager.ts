@@ -139,7 +139,17 @@ export async function getOrphanedWorktrees(
   knownWorktreePaths?: Set<string>
 ): Promise<WorktreeInfo[]> {
   const worktrees = await listWorktrees(repoPath)
-  return worktrees.filter((wt) => !wt.isMain && !knownWorktreePaths?.has(wt.path))
+  // Normalize paths for case-insensitive comparison on Windows
+  const normalizedKnown =
+    knownWorktreePaths && process.platform === 'win32'
+      ? new Set([...knownWorktreePaths].map((p) => p.toLowerCase()))
+      : knownWorktreePaths
+  return worktrees.filter((wt) => {
+    if (wt.isMain) return false
+    if (!normalizedKnown) return true
+    const wtPath = process.platform === 'win32' ? wt.path.toLowerCase() : wt.path
+    return !normalizedKnown.has(wtPath)
+  })
 }
 
 /** Remove all orphaned worktrees and their branches. */

@@ -17,6 +17,9 @@ function emptyStore(): PersistedAgentStore {
   return { version: CURRENT_VERSION, agents: {} }
 }
 
+/** Serializes all write operations to prevent read-modify-write races. */
+let writeQueue = Promise.resolve()
+
 export async function loadPersistedAgents(): Promise<PersistedAgentStore | null> {
   try {
     const raw = await readFile(agentsPath(), 'utf-8')
@@ -34,17 +37,23 @@ export async function savePersistedAgents(store: PersistedAgentStore): Promise<v
   await writeFile(agentsPath(), JSON.stringify(store, null, 2), 'utf-8')
 }
 
-export async function saveAgent(agent: PersistedAgent): Promise<void> {
-  const store = (await loadPersistedAgents()) ?? emptyStore()
-  store.agents[agent.id] = agent
-  await savePersistedAgents(store)
+export function saveAgent(agent: PersistedAgent): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    const store = (await loadPersistedAgents()) ?? emptyStore()
+    store.agents[agent.id] = agent
+    await savePersistedAgents(store)
+  })
+  return writeQueue
 }
 
-export async function removePersistedAgent(agentId: string): Promise<void> {
-  const store = await loadPersistedAgents()
-  if (!store) return
-  delete store.agents[agentId]
-  await savePersistedAgents(store)
+export function removePersistedAgent(agentId: string): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    const store = await loadPersistedAgents()
+    if (!store) return
+    delete store.agents[agentId]
+    await savePersistedAgents(store)
+  })
+  return writeQueue
 }
 
 /** Fixed states that mean the agent was NOT actively running when persisted. */
