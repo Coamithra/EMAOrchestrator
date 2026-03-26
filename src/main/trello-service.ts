@@ -7,6 +7,16 @@ function authParams(creds: TrelloCredentials): string {
   return `key=${creds.apiKey}&token=${creds.apiToken}`
 }
 
+/** Extract a safe error message (avoids leaking credentials from URLs in error objects). */
+function safeErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    // DOMException from AbortSignal.timeout includes no URL — safe to use directly.
+    // TypeError from fetch may include the full URL — strip it.
+    return err.name === 'TypeError' ? 'Network request failed' : err.message
+  }
+  return 'Unknown error'
+}
+
 /** Fetch all open lists for a board. Returns empty array on failure. */
 export async function getListsForBoard(
   boardId: string,
@@ -22,7 +32,7 @@ export async function getListsForBoard(
     const data: Array<{ id: string; name: string }> = await res.json()
     return data.map((l) => ({ id: l.id, name: l.name }))
   } catch (err) {
-    console.error('Trello getListsForBoard error:', err)
+    console.error(`Trello getListsForBoard error: ${safeErrorMessage(err)}`)
     return []
   }
 }
@@ -53,7 +63,7 @@ export async function getCardsFromList(
     const data: Array<{ id: string; name: string; desc: string }> = await res.json()
     return data.map((c) => ({ id: c.id, name: c.name, description: c.desc }))
   } catch (err) {
-    console.error('Trello getCardsFromList error:', err)
+    console.error(`Trello getCardsFromList error: ${safeErrorMessage(err)}`)
     return []
   }
 }
@@ -76,7 +86,7 @@ export async function moveCard(
     }
     return true
   } catch (err) {
-    console.error('Trello moveCard error:', err)
+    console.error(`Trello moveCard error: ${safeErrorMessage(err)}`)
     return false
   }
 }
@@ -88,9 +98,11 @@ export async function addComment(
   creds: TrelloCredentials
 ): Promise<boolean> {
   try {
-    const url = `${TRELLO_API_BASE}/cards/${cardId}/actions/comments?text=${encodeURIComponent(text)}&${authParams(creds)}`
+    const url = `${TRELLO_API_BASE}/cards/${cardId}/actions/comments?${authParams(creds)}`
     const res = await fetch(url, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `text=${encodeURIComponent(text)}`,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     })
     if (!res.ok) {
@@ -99,7 +111,7 @@ export async function addComment(
     }
     return true
   } catch (err) {
-    console.error('Trello addComment error:', err)
+    console.error(`Trello addComment error: ${safeErrorMessage(err)}`)
     return false
   }
 }

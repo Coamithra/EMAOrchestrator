@@ -481,14 +481,15 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       .filter((s) => s.summary)
       .map((s) => `- **Step ${s.phaseIndex + 1}.${s.stepIndex + 1}**: ${s.summary}`)
 
-    const comment = [
+    const parts = [
       `**Agent completed: ${agent.card.name}**`,
       '',
-      `Branch: \`${agent.worktree.branch}\``,
-      '',
-      '**Step summaries:**',
-      ...summaryLines
-    ].join('\n')
+      `Branch: \`${agent.worktree.branch}\``
+    ]
+    if (summaryLines.length > 0) {
+      parts.push('', '**Step summaries:**', ...summaryLines)
+    }
+    const comment = parts.join('\n')
 
     await addComment(cardId, comment, creds)
   }

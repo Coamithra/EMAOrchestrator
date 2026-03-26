@@ -98,8 +98,13 @@ describe('getCardsFromList', () => {
     ])
   })
 
-  it('returns empty array on failure', async () => {
+  it('returns empty array on HTTP error', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 })
+    expect(await getCardsFromList('list1', creds)).toEqual([])
+  })
+
+  it('returns empty array on network error', async () => {
+    mockFetch.mockRejectedValue(new Error('timeout'))
     expect(await getCardsFromList('list1', creds)).toEqual([])
   })
 })
@@ -142,12 +147,19 @@ describe('addComment', () => {
 
     const [url, options] = mockFetch.mock.calls[0]
     expect(url).toContain('/cards/card1/actions/comments')
-    expect(url).toContain('text=Hello%20%26%20world')
+    expect(url).not.toContain('text=')
     expect(options.method).toBe('POST')
+    expect(options.body).toBe('text=Hello%20%26%20world')
+    expect(options.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
   })
 
-  it('returns false on failure', async () => {
+  it('returns false on HTTP error', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 })
+    expect(await addComment('card1', 'test', creds)).toBe(false)
+  })
+
+  it('returns false on network error', async () => {
+    mockFetch.mockRejectedValue(new Error('network'))
     expect(await addComment('card1', 'test', creds)).toBe(false)
   })
 })
