@@ -163,8 +163,13 @@ Main panel for viewing a selected agent's state and output. Composes two sub-com
 
 - **`TerminalView`** (`src/renderer/src/components/TerminalView.tsx`) — xterm.js wrapper that renders streaming CLI output. Subscribes to `cli:event` IPC channel, filtering by session ID `orchestration-<agentId>`. Writes `stream:text` deltas to the terminal. Uses `@xterm/addon-fit` with a ResizeObserver for responsive sizing. Terminal instance is created/disposed per agent ID change.
 - **`StepProgress`** (`src/renderer/src/components/StepProgress.tsx`) — Collapsible phase/step progress indicator. Shows each runbook phase with expand/collapse, and each step with status icons (pending/running/done) and completion summaries. Current active phase auto-expands. Derives state from `AgentStateSnapshot` + `StepCompletionRecord[]` + the agent's `Runbook`.
+- **`PermissionDialog`** (`src/renderer/src/components/PermissionDialog.tsx`) — Modal overlay for permission requests. Shows tool name, description, and tool input as formatted JSON. Allow/Deny buttons call `respondToOrchestrationPermission()` via IPC. Rendered inside the terminal container when `cli:event` delivers a `permission:request` event.
+- **`QuestionDialog`** (`src/renderer/src/components/QuestionDialog.tsx`) — Modal overlay for `AskUserQuestion` tool calls. Shows the question text and a text input. Submit calls `respondToOrchestrationQuestion()` via IPC. Enter key submits (Shift+Enter for newline).
+- **Permission/question event tracking:** `AgentDetailPanel` subscribes to `cli:event` (filtered by `sessionId === 'orchestration-<agentId>'`) to receive `PermissionRequest` and `UserQuestionRequest` data in real-time. Dialogs are cleared when the agent exits `waiting_for_human` state or on agent switch.
 - **Header:** Card name, phase/step label, and a "waiting for input" badge when `pendingHumanInteraction` is set.
+- **Sidebar notification:** A pulsing "!" badge appears on sidebar agent items when `stateSnapshot.state === 'waiting_for_human'`.
 - **`AgentSnapshot.runbook`:** The full `Runbook` is included in `AgentSnapshot` so the renderer has phase/step names without an extra IPC call.
+- **`pendingHumanInteraction` sync:** `App.tsx` clears `pendingHumanInteraction` to `null` on `agent:state-changed` events when the new state is not `waiting_for_human`, keeping the badge in sync without needing a separate event.
 
 ## Development Workflow
 

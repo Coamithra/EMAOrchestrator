@@ -52,9 +52,15 @@ function App(): React.JSX.Element {
         // handlers for step-advanced/step-completed/error/done unnecessary.
         case 'agent:state-changed':
           setAgents((prev) =>
-            prev.map((a) =>
-              a.id === event.data.agentId ? { ...a, stateSnapshot: event.data.stateSnapshot } : a
-            )
+            prev.map((a) => {
+              if (a.id !== event.data.agentId) return a
+              const updated: AgentSnapshot = { ...a, stateSnapshot: event.data.stateSnapshot }
+              // Clear pendingHumanInteraction when agent exits waiting state
+              if (event.data.stateSnapshot.state !== 'waiting_for_human') {
+                updated.pendingHumanInteraction = null
+              }
+              return updated
+            })
           )
           break
 

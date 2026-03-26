@@ -55,6 +55,9 @@ function Sidebar({ agents, selectedAgentId, onSelectAgent }: SidebarProps): Reac
                 <div className="sidebar__item-name">{agent.card.name}</div>
                 <div className="sidebar__item-step">{getStepLabel(agent)}</div>
               </div>
+              {agent.stateSnapshot.state === 'waiting_for_human' && (
+                <span className="sidebar__notification-badge" title="Waiting for input">!</span>
+              )}
             </li>
           ))}
         </ul>
