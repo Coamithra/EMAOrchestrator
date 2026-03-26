@@ -44,6 +44,17 @@ Wraps `git worktree` commands into an async service. Stateless exported function
 - **`cleanupOrphanedWorktrees(repoPath)`** — Removes all orphans and their branches.
 - **Shared types:** `src/shared/worktree.ts` defines `WorktreeInfo` for use across main and renderer.
 
+### Agent State Machine (`src/main/agent-state-machine.ts`)
+
+Tracks a single agent's lifecycle as it works through a parsed runbook. Higher-level than the CliDriver state machine — this orchestrates progress through runbook phases and steps.
+
+- **Dynamic states:** Constructed from the parsed `Runbook` phases. Each phase name becomes a valid state. Fixed states (`idle`, `picking_card`, `error`, `waiting_for_human`, `done`) are always present.
+- **Transition enforcement:** Only valid transitions are allowed (e.g., phases must be traversed in order). Invalid transitions throw.
+- **Step tracking:** `advanceStep()` marks the current step complete and advances within a phase or auto-transitions to the next phase.
+- **Pause/resume:** `setWaitingForHuman()` saves the current phase/step, `resumeFromWaiting()` restores it.
+- **Events:** Emits `state:changed`, `step:advanced`, `step:completed`, `phase:completed`, `error`.
+- **Shared types:** `src/shared/agent-state.ts` defines `AgentState`, `AgentStateSnapshot`, `AgentStepProgress`, and event types.
+
 ### Session Registry (`src/main/session-registry.ts`)
 
 Manages active CliDriver instances and bridges their events to the renderer. One registry for the app.
