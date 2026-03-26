@@ -23,6 +23,12 @@ interface RunningAgent {
   lastAssistantText: string
   /** Set to true when stopAgent is called. */
   stopped: boolean
+  /** Timestamp (ms) of the last meaningful driver event. Used for stuck detection. */
+  lastActivityAt: number
+  /** Whether a stuck warning has been emitted since the last activity. */
+  stuckNotified: boolean
+  /** Interval timer for stuck-agent checks. */
+  stuckCheckInterval: ReturnType<typeof setInterval> | null
 }
 
 /**
@@ -40,7 +46,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
   constructor(
     private readonly agentManager: AgentManager,
-    maxConcurrentAgents = 3
+    maxConcurrentAgents = 3,
+    private stuckTimeoutMs = 10 * 60 * 1000
   ) {
     super()
     this.maxConcurrentAgents = maxConcurrentAgents
@@ -86,6 +93,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
     entry.stopped = true
     entry.driver?.abort()
+    this.stopStuckWatchdog(entry)
     this.running.delete(agentId)
     this.agentManager.setSessionId(agentId, null)
     this.agentManager.setPendingHumanInteraction(agentId, null)
@@ -159,6 +167,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     for (const [agentId, entry] of this.running) {
       entry.stopped = true
       entry.driver?.abort()
+      this.stopStuckWatchdog(entry)
       this.agentManager.setSessionId(agentId, null)
     }
     this.running.clear()
@@ -175,9 +184,14 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       driver: null,
       sdkSessionId: null,
       lastAssistantText: '',
-      stopped: false
+      stopped: false,
+      lastActivityAt: Date.now(),
+      stuckNotified: false,
+      stuckCheckInterval: null
     }
     this.running.set(agentId, entry)
+
+    this.startStuckWatchdog(entry)
 
     this.runAgentLoop(entry)
       .catch((err) => {
@@ -185,6 +199,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         this.handleAgentError(agentId, err instanceof Error ? err.message : String(err))
       })
       .finally(() => {
+        this.stopStuckWatchdog(entry)
         // Ensure the running slot is always freed, even on unexpected throws
         this.running.delete(agentId)
         this.agentManager.setSessionId(agentId, null)
@@ -311,10 +326,10 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         break
 
       case 'error': {
-        // Retry from where we errored
+        // Retry from the step where we errored (preserves step progress)
         const snapshot = sm.getSnapshot()
         if (snapshot.phaseIndex >= 0) {
-          sm.transition(phases[snapshot.phaseIndex])
+          sm.resumeFromError()
         } else {
           sm.transition('idle')
           sm.transition('picking_card')
@@ -358,18 +373,29 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       const driver = new CliDriver()
       entry.driver = driver
       entry.lastAssistantText = ''
+      entry.lastActivityAt = Date.now()
+      entry.stuckNotified = false
 
       this.wireDriverToRenderer(agentId, driver)
+
+      const resetActivity = (): void => {
+        entry.lastActivityAt = Date.now()
+        entry.stuckNotified = false
+      }
 
       driver.on('session:init', (info) => {
         entry.sdkSessionId = info.sessionId
         this.agentManager.setSessionId(agentId, info.sessionId)
+        resetActivity()
       })
+
+      driver.on('stream:text', resetActivity)
 
       driver.on('assistant:message', (content: AssistantContent) => {
         if (content.text) {
           entry.lastAssistantText = content.text
         }
+        resetActivity()
       })
 
       driver.on('permission:request', (request) => {
@@ -443,6 +469,38 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       }
     }
     this.emit('agent:errored', agentId, message)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stuck-agent watchdog
+  // ---------------------------------------------------------------------------
+
+  private startStuckWatchdog(entry: RunningAgent): void {
+    if (this.stuckTimeoutMs <= 0) return
+
+    entry.stuckCheckInterval = setInterval(() => {
+      if (entry.stopped) {
+        this.stopStuckWatchdog(entry)
+        return
+      }
+
+      // Don't flag as stuck if waiting for human input
+      const sm = this.agentManager.getStateMachine(entry.agentId)
+      if (sm?.getState() === 'waiting_for_human') return
+
+      const elapsed = Date.now() - entry.lastActivityAt
+      if (elapsed >= this.stuckTimeoutMs && !entry.stuckNotified) {
+        entry.stuckNotified = true
+        this.emit('agent:stuck', entry.agentId, elapsed)
+      }
+    }, 60_000) // check every minute
+  }
+
+  private stopStuckWatchdog(entry: RunningAgent): void {
+    if (entry.stuckCheckInterval) {
+      clearInterval(entry.stuckCheckInterval)
+      entry.stuckCheckInterval = null
+    }
   }
 
   // ---------------------------------------------------------------------------

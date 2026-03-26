@@ -43,7 +43,7 @@ Wraps the Agent SDK's `query()` into an EventEmitter-based service. One `CliDriv
 
 ### Trello Service (`src/main/trello-service.ts`)
 
-Stateless exported functions for Trello REST API operations. Uses native `fetch()` with 10-second timeouts. All functions degrade gracefully (return empty arrays or `false` on failure, never throw).
+Stateless exported functions for Trello REST API operations. Uses native `fetch()` with 10-second timeouts. Read functions degrade gracefully (return empty arrays on failure, never throw). Mutation functions (`moveCard`, `addComment`) retry up to 3 times with exponential backoff (1s, 2s delays) on network errors and 5xx server errors; 4xx client errors are not retried.
 
 - **`getListsForBoard(boardId, creds)`** — Fetches all open lists for a board.
 - **`getListIdByName(boardId, listName, creds)`** — Resolves a list name to its ID (case-insensitive).
@@ -82,7 +82,7 @@ Tracks a single agent's lifecycle as it works through a parsed runbook. Higher-l
 - **Dynamic states:** Constructed from the parsed `Runbook` phases. Each phase name becomes a valid state. Fixed states (`idle`, `picking_card`, `error`, `waiting_for_human`, `done`) are always present.
 - **Transition enforcement:** Only valid transitions are allowed (e.g., phases must be traversed in order). Invalid transitions throw.
 - **Step tracking:** `advanceStep()` marks the current step complete and advances within a phase or auto-transitions to the next phase.
-- **Pause/resume:** `setWaitingForHuman()` saves the current phase/step, `resumeFromWaiting()` restores it.
+- **Pause/resume:** `setWaitingForHuman()` saves the current phase/step, `resumeFromWaiting()` restores it. `resumeFromError()` transitions from error back to the errored phase without resetting step tracking (used for restart-from-last-step).
 - **Events:** Emits `state:changed`, `step:advanced`, `step:completed`, `phase:completed`, `error`.
 - **Shared types:** `src/shared/agent-state.ts` defines `AgentState`, `AgentStateSnapshot`, `AgentStepProgress`, and event types.
 
@@ -142,7 +142,9 @@ Central controller that drives agents through runbook steps. One async loop per 
 - **Step execution:** Each step creates a fresh CliDriver, generates a prompt via `generateStepPrompt()`, runs the session, extracts a summary from the last assistant message, calls `advanceStep()` (which auto-transitions phases), then sets the summary.
 - **Session resumption:** Steps within the same agent share an SDK session ID (per spike #009). The first step creates a new session; subsequent steps resume it.
 - **Permission/question flow:** CliDriver blocks internally (deferred promise). The loop sets `waiting_for_human` on the state machine and stores the pending interaction. When the user responds via IPC, the driver unblocks and the session continues. The `runStep()` Promise stays pending during pauses — no polling needed.
-- **Events:** Emits `agent:running`, `agent:queued`, `agent:dequeued`, `agent:completed`, `agent:errored`, `agent:stopped`.
+- **Error recovery:** When an agent errors and is restarted, `resumeFromError()` preserves the phase/step position so the agent resumes from the failed step, not the beginning of the phase.
+- **Stuck-agent watchdog:** A periodic check (every 60s) detects agents with no CLI activity for the configured timeout (`stuckAgentTimeoutMinutes`, default 10). Emits `agent:stuck` event. Paused during `waiting_for_human` state. Activity resets on any `stream:text`, `assistant:message`, or `session:init` event.
+- **Events:** Emits `agent:running`, `agent:queued`, `agent:dequeued`, `agent:completed`, `agent:errored`, `agent:stopped`, `agent:stuck`.
 - **Renderer forwarding:** All CliDriver events are forwarded to the renderer via `cli:event` channel using session ID `orchestration-<agentId>`.
 - **Shared types:** `src/shared/orchestration-loop.ts` defines `OrchestrationLoopEvents` and `ConcurrencyStatus`.
 - **IPC channels:** `orchestration:start`, `orchestration:stop`, `orchestration:respondPermission`, `orchestration:respondQuestion`, `orchestration:isRunning`, `orchestration:getConcurrencyStatus`.

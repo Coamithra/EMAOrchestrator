@@ -343,6 +343,25 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
   }
 
   /**
+   * Resume from error state back to the phase where the error occurred,
+   * without resetting step tracking. Used for restart-from-last-step.
+   * Throws if not currently in error state or if there's no phase to resume to.
+   */
+  resumeFromError(): void {
+    if (this.state !== 'error') {
+      throw new Error(`Cannot resume from error: not in error state (current: "${this.state}")`)
+    }
+    if (this.phaseIndex === -1) {
+      throw new Error('Cannot resume from error: no phase context to resume to')
+    }
+
+    const previous = this.state
+    this.state = this.phaseNames[this.phaseIndex]
+    this.errorMessage = undefined
+    this.emit('state:changed', this.state, previous)
+  }
+
+  /**
    * Resume from waiting_for_human back to the phase we were in.
    * Throws if not currently in waiting_for_human.
    */

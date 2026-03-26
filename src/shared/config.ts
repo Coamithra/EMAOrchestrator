@@ -11,6 +11,7 @@ export interface AppConfig {
   }
   claudeCliPath: string
   maxConcurrentAgents: number
+  stuckAgentTimeoutMinutes: number
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -25,7 +26,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     done: 'Done'
   },
   claudeCliPath: '',
-  maxConcurrentAgents: 3
+  maxConcurrentAgents: 3,
+  stuckAgentTimeoutMinutes: 10
 }
 
 export type FieldStatus = { ok: true } | { ok: false; error: string } | null

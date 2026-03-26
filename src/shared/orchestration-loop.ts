@@ -12,6 +12,8 @@ export type OrchestrationLoopEvents = {
   'agent:errored': (agentId: string, message: string) => void
   /** An agent's orchestration loop was stopped (aborted). */
   'agent:stopped': (agentId: string) => void
+  /** An agent appears stuck (no activity for the configured timeout). */
+  'agent:stuck': (agentId: string, elapsedMs: number) => void
 }
 
 /** Concurrency status snapshot for the UI. */

@@ -2,6 +2,8 @@ import type { TrelloCredentials, TrelloList, TrelloCard } from '../shared/trello
 
 const TRELLO_API_BASE = 'https://api.trello.com/1'
 const REQUEST_TIMEOUT_MS = 10_000
+const MAX_RETRIES = 2 // 3 total attempts
+const RETRY_BASE_MS = 1_000
 
 function authParams(creds: TrelloCredentials): string {
   return `key=${creds.apiKey}&token=${creds.apiToken}`
@@ -68,50 +70,65 @@ export async function getCardsFromList(
   }
 }
 
-/** Move a card to a different list. Fails silently on error. */
+/** Move a card to a different list. Retries with exponential backoff on failure. */
 export async function moveCard(
   cardId: string,
   targetListId: string,
   creds: TrelloCredentials
 ): Promise<boolean> {
-  try {
-    const url = `${TRELLO_API_BASE}/cards/${cardId}?idList=${targetListId}&${authParams(creds)}`
-    const res = await fetch(url, {
-      method: 'PUT',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-    })
-    if (!res.ok) {
-      console.error(`Trello moveCard failed: ${res.status}`)
-      return false
-    }
-    return true
-  } catch (err) {
-    console.error(`Trello moveCard error: ${safeErrorMessage(err)}`)
-    return false
-  }
+  const url = `${TRELLO_API_BASE}/cards/${cardId}?idList=${targetListId}&${authParams(creds)}`
+  return mutateWithRetry(url, { method: 'PUT' }, 'moveCard')
 }
 
-/** Add a comment to a card. Fails silently on error. */
+/** Add a comment to a card. Retries with exponential backoff on failure. */
 export async function addComment(
   cardId: string,
   text: string,
   creds: TrelloCredentials
 ): Promise<boolean> {
-  try {
-    const url = `${TRELLO_API_BASE}/cards/${cardId}/actions/comments?${authParams(creds)}`
-    const res = await fetch(url, {
+  const url = `${TRELLO_API_BASE}/cards/${cardId}/actions/comments?${authParams(creds)}`
+  return mutateWithRetry(
+    url,
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `text=${encodeURIComponent(text)}`,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-    })
-    if (!res.ok) {
-      console.error(`Trello addComment failed: ${res.status}`)
-      return false
+      body: `text=${encodeURIComponent(text)}`
+    },
+    'addComment'
+  )
+}
+
+/**
+ * Execute a Trello mutation with retry and exponential backoff.
+ * Retries on network errors and 5xx server errors. Does not retry 4xx client errors.
+ */
+async function mutateWithRetry(
+  url: string,
+  init: RequestInit,
+  label: string
+): Promise<boolean> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      })
+      if (res.ok) return true
+      if (res.status >= 400 && res.status < 500) {
+        // Client error — don't retry
+        console.error(`Trello ${label} failed: ${res.status} (not retrying)`)
+        return false
+      }
+      // Server error — retry
+      console.error(`Trello ${label} failed: ${res.status} (attempt ${attempt + 1}/${MAX_RETRIES + 1})`)
+    } catch (err) {
+      console.error(
+        `Trello ${label} error: ${safeErrorMessage(err)} (attempt ${attempt + 1}/${MAX_RETRIES + 1})`
+      )
     }
-    return true
-  } catch (err) {
-    console.error(`Trello addComment error: ${safeErrorMessage(err)}`)
-    return false
+    if (attempt < MAX_RETRIES) {
+      await new Promise((r) => setTimeout(r, RETRY_BASE_MS * Math.pow(2, attempt)))
+    }
   }
+  return false
 }
