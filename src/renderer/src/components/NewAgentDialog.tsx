@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { TrelloCard } from '@shared/trello'
+import { branchNameFromCard } from '@shared/branch-name'
 import './NewAgentDialog.css'
 
 interface NewAgentDialogProps {
@@ -54,22 +55,43 @@ function NewAgentDialog({ onCreated, onClose }: NewAgentDialogProps): React.JSX.
     }
   }, [cards, selectedCardId, onCreated])
 
+  const handleCardKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLLIElement>, cardId: string) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        setSelectedCardId(cardId)
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        const next = e.currentTarget.nextElementSibling as HTMLElement | null
+        next?.focus()
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        const prev = e.currentTarget.previousElementSibling as HTMLElement | null
+        prev?.focus()
+      }
+    },
+    []
+  )
+
   const selectedCard = cards.find((c) => c.id === selectedCardId)
 
   return (
     <div
-      className="new-agent-dialog"
+      className="interaction-dialog new-agent-dialog--overlay"
       role="dialog"
       aria-modal="true"
       aria-label="New Agent"
       onClick={creating ? undefined : onClose}
     >
-      <div className="new-agent-dialog__card" onClick={(e) => e.stopPropagation()}>
-        <div className="new-agent-dialog__header">
-          <span className="new-agent-dialog__title">New Agent</span>
+      <div
+        className="interaction-dialog__card new-agent-dialog--wider"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="interaction-dialog__header">
+          <span className="interaction-dialog__title">New Agent</span>
         </div>
 
-        <div className="new-agent-dialog__body">
+        <div className="interaction-dialog__body">
           <div>
             <div className="new-agent-dialog__label">Select a card from Backlog</div>
             {loading ? (
@@ -77,14 +99,18 @@ function NewAgentDialog({ onCreated, onClose }: NewAgentDialogProps): React.JSX.
             ) : cards.length === 0 ? (
               <div className="new-agent-dialog__empty">No cards in Backlog</div>
             ) : (
-              <ul className="new-agent-dialog__card-list">
+              <ul className="new-agent-dialog__card-list" role="listbox">
                 {cards.map((card) => (
                   <li
                     key={card.id}
+                    role="option"
+                    aria-selected={card.id === selectedCardId}
+                    tabIndex={0}
                     className={`new-agent-dialog__card-item${
                       card.id === selectedCardId ? ' new-agent-dialog__card-item--selected' : ''
                     }`}
                     onClick={() => setSelectedCardId(card.id)}
+                    onKeyDown={(e) => handleCardKeyDown(e, card.id)}
                   >
                     <div>{card.name}</div>
                     {card.description && (
@@ -102,8 +128,8 @@ function NewAgentDialog({ onCreated, onClose }: NewAgentDialogProps): React.JSX.
           {selectedCard && (
             <div>
               <div className="new-agent-dialog__label">Branch (auto-generated)</div>
-              <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--ev-c-text-2)' }}>
-                {branchPreview(selectedCard.name)}
+              <div className="new-agent-dialog__branch-preview">
+                {branchNameFromCard(selectedCard.name)}
               </div>
             </div>
           )}
@@ -111,16 +137,16 @@ function NewAgentDialog({ onCreated, onClose }: NewAgentDialogProps): React.JSX.
           {error && <div className="new-agent-dialog__error">{error}</div>}
         </div>
 
-        <div className="new-agent-dialog__actions">
+        <div className="interaction-dialog__actions">
           <button
-            className="new-agent-dialog__btn new-agent-dialog__btn--cancel"
+            className="interaction-dialog__btn interaction-dialog__btn--secondary"
             onClick={onClose}
             disabled={creating}
           >
             Cancel
           </button>
           <button
-            className="new-agent-dialog__btn new-agent-dialog__btn--start"
+            className="interaction-dialog__btn interaction-dialog__btn--submit"
             onClick={handleStart}
             disabled={!selectedCardId || creating}
           >
@@ -130,16 +156,6 @@ function NewAgentDialog({ onCreated, onClose }: NewAgentDialogProps): React.JSX.
       </div>
     </div>
   )
-}
-
-/** Mirror the branch name derivation from AgentManager.branchNameFromCard */
-function branchPreview(cardName: string): string {
-  const stripped = cardName.replace(/^#\d+\s*/, '')
-  const slug = stripped
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-  return `feat-${slug}`
 }
 
 export default NewAgentDialog

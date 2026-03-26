@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { branchNameFromCard } from '../shared/branch-name'
 import type { Runbook } from '../shared/runbook'
 import type { WorktreeInfo } from '../shared/worktree'
 import type { CardInfo, AgentSnapshot, AgentManagerEvents } from '../shared/agent-manager'
@@ -44,7 +45,7 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
    * constructor throws (bad runbook), the worktree is cleaned up.
    */
   async createAgent(card: CardInfo, runbook: Runbook, repoPath: string): Promise<string> {
-    const branch = this.branchNameFromCard(card.name)
+    const branch = branchNameFromCard(card.name)
     const worktree = await createWorktree(repoPath, branch)
 
     let stateMachine: AgentStateMachine
@@ -285,24 +286,5 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     stateMachine.on('error', (message: string) => {
       this.emit('agent:error', id, message)
     })
-  }
-
-  /**
-   * Derive a branch name from a Trello card name.
-   * "#011 Agent manager" → "feat-agent-manager"
-   *
-   * Uses hyphens instead of slashes so the worktree manager can create
-   * a flat sibling directory (e.g., `../feat-agent-manager/`). Slashed
-   * branch names like `feat/xxx` would create nested directories.
-   */
-  private branchNameFromCard(cardName: string): string {
-    // Strip the card number prefix (e.g. "#011 ")
-    const stripped = cardName.replace(/^#\d+\s*/, '')
-    // Lowercase, replace spaces/special chars with hyphens
-    const slug = stripped
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-    return `feat-${slug}`
   }
 }
