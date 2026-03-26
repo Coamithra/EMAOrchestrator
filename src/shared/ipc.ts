@@ -14,6 +14,7 @@ import type { WorktreeInfo } from './worktree'
 import type { AgentSnapshot } from './agent-manager'
 import type { ConcurrencyStatus } from './orchestration-loop'
 import type { TrelloCard, TrelloList } from './trello'
+import type { AgentStateSnapshot, AgentStepProgress } from './agent-state'
 
 // ---------------------------------------------------------------------------
 // IPC Channel Constants
@@ -57,6 +58,9 @@ export const IpcChannels = {
   ORCHESTRATION_IS_RUNNING: 'orchestration:isRunning',
   ORCHESTRATION_GET_CONCURRENCY_STATUS: 'orchestration:getConcurrencyStatus',
 
+  // Agent events (main → renderer push)
+  AGENT_EVENT: 'agent:event',
+
   // Trello
   TRELLO_GET_LISTS: 'trello:getLists',
   TRELLO_GET_BACKLOG_CARDS: 'trello:getBacklogCards'
@@ -81,6 +85,29 @@ export type CliEvent =
 export interface CliEventPayload {
   sessionId: string
   event: CliEvent
+}
+
+// ---------------------------------------------------------------------------
+// Agent Event Streaming (main → renderer)
+// ---------------------------------------------------------------------------
+
+/** Discriminated union of agent lifecycle events pushed from main to renderer. */
+export type AgentEvent =
+  | { type: 'agent:created'; data: { agent: AgentSnapshot } }
+  | { type: 'agent:state-changed'; data: { agentId: string; stateSnapshot: AgentStateSnapshot } }
+  | { type: 'agent:step-advanced'; data: { agentId: string; progress: AgentStepProgress } }
+  | { type: 'agent:step-completed'; data: { agentId: string; progress: AgentStepProgress } }
+  | {
+      type: 'agent:phase-completed'
+      data: { agentId: string; phaseName: string; phaseIndex: number }
+    }
+  | { type: 'agent:error'; data: { agentId: string; message: string } }
+  | { type: 'agent:done'; data: { agentId: string } }
+  | { type: 'agent:destroyed'; data: { agentId: string } }
+
+/** Payload shape for the agent:event channel. */
+export interface AgentEventPayload {
+  event: AgentEvent
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +136,7 @@ export interface PersistenceAPI {
   listAgents(): Promise<AgentSnapshot[]>
   getAgent(agentId: string): Promise<AgentSnapshot | null>
   dismissAgent(agentId: string): Promise<void>
+  onAgentEvent(callback: (payload: AgentEventPayload) => void): () => void
 }
 
 /** Orchestration loop API exposed to the renderer. */

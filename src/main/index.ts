@@ -13,6 +13,7 @@ import {
 } from './agent-persistence-service'
 import { loadConfig } from './config-service'
 import { cleanupOrphanedWorktrees } from './worktree-manager'
+import { IpcChannels, type AgentEventPayload } from '../shared/ipc'
 
 const agentManager = new AgentManager()
 let orchestrationLoop: OrchestrationLoop | null = null
@@ -47,6 +48,47 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+/** Broadcast an agent event to all open renderer windows. */
+function broadcastAgentEvent(payload: AgentEventPayload): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(IpcChannels.AGENT_EVENT, payload)
+    }
+  }
+}
+
+/** Wire AgentManager events to renderer via IPC push. */
+function wireAgentEventForwarding(): void {
+  agentManager.on('agent:created', (snapshot) => {
+    broadcastAgentEvent({ event: { type: 'agent:created', data: { agent: snapshot } } })
+  })
+  agentManager.on('agent:state-changed', (agentId, stateSnapshot) => {
+    broadcastAgentEvent({
+      event: { type: 'agent:state-changed', data: { agentId, stateSnapshot } }
+    })
+  })
+  agentManager.on('agent:step-advanced', (agentId, progress) => {
+    broadcastAgentEvent({ event: { type: 'agent:step-advanced', data: { agentId, progress } } })
+  })
+  agentManager.on('agent:step-completed', (agentId, progress) => {
+    broadcastAgentEvent({ event: { type: 'agent:step-completed', data: { agentId, progress } } })
+  })
+  agentManager.on('agent:phase-completed', (agentId, phaseName, phaseIndex) => {
+    broadcastAgentEvent({
+      event: { type: 'agent:phase-completed', data: { agentId, phaseName, phaseIndex } }
+    })
+  })
+  agentManager.on('agent:error', (agentId, message) => {
+    broadcastAgentEvent({ event: { type: 'agent:error', data: { agentId, message } } })
+  })
+  agentManager.on('agent:done', (agentId) => {
+    broadcastAgentEvent({ event: { type: 'agent:done', data: { agentId } } })
+  })
+  agentManager.on('agent:destroyed', (agentId) => {
+    broadcastAgentEvent({ event: { type: 'agent:destroyed', data: { agentId } } })
+  })
 }
 
 /**
@@ -111,6 +153,7 @@ app.whenReady().then(async () => {
   orchestrationLoop = new OrchestrationLoop(agentManager, config?.maxConcurrentAgents)
 
   registerIpcHandlers(agentManager, orchestrationLoop)
+  wireAgentEventForwarding()
 
   createWindow()
 

@@ -49,6 +49,11 @@ const api = {
     ipcRenderer.invoke(IpcChannels.AGENT_GET, agentId),
   dismissAgent: (agentId: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.AGENT_DISMISS, agentId),
+  onAgentEvent: (callback: (payload: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, payload: unknown): void => callback(payload)
+    ipcRenderer.on(IpcChannels.AGENT_EVENT, handler)
+    return () => ipcRenderer.removeListener(IpcChannels.AGENT_EVENT, handler)
+  },
 
   // Orchestration loop
   startOrchestration: (agentId: string): Promise<void> =>
