@@ -74,15 +74,18 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     entry.driver?.abort()
     this.running.delete(agentId)
     this.agentManager.setSessionId(agentId, null)
+    this.agentManager.setPendingHumanInteraction(agentId, null)
     this.emit('agent:stopped', agentId)
   }
 
-  /** Respond to a permission request on an agent's active CLI session. */
+  /**
+   * Respond to a permission request on an agent's active CLI session.
+   * No-op if the agent was stopped (race between stop and respond is benign).
+   */
   respondToPermission(agentId: string, response: PermissionResponse): void {
     const entry = this.running.get(agentId)
-    if (!entry?.driver) {
-      throw new Error(`No active session for agent ${agentId}`)
-    }
+    if (!entry?.driver) return // agent was stopped or has no active session
+
     entry.driver.respondToPermission(response)
 
     const sm = this.agentManager.getStateMachine(agentId)
@@ -92,12 +95,14 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.agentManager.setPendingHumanInteraction(agentId, null)
   }
 
-  /** Respond to a user question on an agent's active CLI session. */
+  /**
+   * Respond to a user question on an agent's active CLI session.
+   * No-op if the agent was stopped (race between stop and respond is benign).
+   */
   async respondToQuestion(agentId: string, response: UserQuestionResponse): Promise<void> {
     const entry = this.running.get(agentId)
-    if (!entry?.driver) {
-      throw new Error(`No active session for agent ${agentId}`)
-    }
+    if (!entry?.driver) return // agent was stopped or has no active session
+
     await entry.driver.respondToUserQuestion(response)
 
     const sm = this.agentManager.getStateMachine(agentId)
@@ -357,14 +362,14 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
   /** Forward CliDriver events to the renderer for live UI display. */
   private wireDriverToRenderer(agentId: string, driver: CliDriver): void {
-    const win = BrowserWindow.getAllWindows()[0]
-    if (!win || win.isDestroyed()) return
-
     // Use a stable session ID per agent so the renderer can correlate events
     const sessionId = `orchestration-${agentId}`
 
+    // Look up window at push-time so events reach a new window if the
+    // original was closed and re-opened (e.g., macOS activate).
     const push = (event: CliEventPayload['event']): void => {
-      if (!win.isDestroyed()) {
+      const win = BrowserWindow.getAllWindows()[0]
+      if (win && !win.isDestroyed()) {
         win.webContents.send('cli:event', { sessionId, event } satisfies CliEventPayload)
       }
     }
