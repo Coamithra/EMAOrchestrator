@@ -24,7 +24,7 @@
 
 **Decision:** Use a single long-lived SDK session per agent. Each runbook step is sent as a new prompt within the same conversation — prior-step context is already in Claude's memory. No manual context injection, summarization, or sliding window needed. The SDK's built-in auto-compaction handles the edge case where context approaches the 1M token limit.
 
-**Why not inject context?** With 1M native context on Claude 4.6 and SDK auto-compaction as a safety net, manually managing context is unnecessary complexity. A 29-step runbook at ~20K tokens/step fits comfortably (~580K tokens).
+**Why not inject context?** With 1M native context on Claude 4.6 (required model family) and SDK auto-compaction as a safety net, manually managing context is unnecessary complexity. A 29-step runbook fits comfortably (~670K tokens including prompts, outputs, and generation room).
 
 **Full decision doc:** `docs/spike-009-context-strategy.md`
 

@@ -27,9 +27,9 @@
 - [x] Ensure chosen strategy documented with rationale
 
 ## Phase 6: Review & Ship
-- [ ] Update CLAUDE.md if needed
-- [ ] Commit & push
-- [ ] Peer review
+- [x] Update CLAUDE.md if needed
+- [x] Commit & push
+- [x] Peer review
 - [ ] Pull main into branch
 - [ ] Re-run smoke tests
 - [ ] Return to main checkout

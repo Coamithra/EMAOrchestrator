@@ -76,16 +76,18 @@ Use one SDK session per agent. Each step prompt is sent as a new message within 
 - The Agent SDK maintains full conversation history via session persistence (JSONL transcript files on disk)
 - Session resumption works via `resume: sessionId` (already implemented in our CLI driver)
 - Within a single session, `streamInput()` can send follow-up messages without spawning a new subprocess
-- Claude 4.6 models have **1M tokens natively** — comfortably fits a 29-step runbook
+- **Assumption: 1M token context window.** Claude Opus 4.6 and Sonnet 4.6 have 1M natively. Older models (Claude 3.5 Sonnet, Claude 4 Sonnet without beta header) have 200K — this strategy requires 1M and the orchestrator should enforce this via model selection. If a smaller-window model is configured, auto-compaction becomes the primary mechanism rather than a safety net.
 - **Safety net: SDK auto-compaction** kicks in automatically if context approaches the limit, summarizing older messages without any orchestrator intervention
 
-**Context budget math:**
-- 1M token context window
-- 29 steps × 20K avg output = ~580K tokens
+**Context budget math (assuming 1M context):**
+- 29 steps × ~20K avg assistant output = ~580K tokens
+- 29 step prompts × ~2K avg input = ~58K tokens
 - System prompt + runbook + card description ≈ 5-10K tokens
-- Total ≈ 590K tokens — well within 1M, with ~400K headroom
-- Even with verbose steps (30K each), total is ~870K + overhead ≈ 900K — still fits
-- If it somehow exceeds 1M, auto-compaction handles it transparently
+- Output generation room for current step ≈ 20-30K tokens
+- **Total ≈ 670K tokens — well within 1M, with ~330K headroom**
+- Even with verbose steps (30K output each): 29×30K output + 29×2K input + 10K system + 30K generation room ≈ 970K — tight but fits
+- If it exceeds 1M, auto-compaction handles it transparently
+- **Note:** API cost is similar to Option 1 — at turn N, Claude re-reads the full conversation history. The advantage of Option 5 is implementation simplicity, not cost savings.
 
 **Auto-compaction details:**
 - The SDK emits `SDKCompactBoundaryMessage` (type `system`, subtype `compact_boundary`) when compaction occurs
@@ -107,10 +109,21 @@ Use one SDK session per agent. Each step prompt is sent as a new message within 
 4. **Auto-compaction as safety net** — if a session somehow exceeds 1M tokens, the SDK compacts automatically
 5. **Session resumption works** — if the app crashes, `resume: sessionId` restores full context from the JSONL transcript
 
+### Step Advancement Mechanism
+
+Each runbook step is a separate `query()` call with `resume: previousSessionId`. This means:
+- Step 1: `query({ prompt: step1Prompt, options: { cwd } })` — returns `sessionId`
+- Step 2: `query({ prompt: step2Prompt, options: { resume: sessionId, cwd } })` — resumes the session
+- Step N: `query({ prompt: stepNPrompt, options: { resume: sessionId, cwd } })` — same pattern
+
+Each `query()` call spawns a new Claude Code subprocess, but the SDK loads the full session transcript from disk (JSONL files in `~/.claude/projects/<hash>/`), so Claude has the full conversation history. This is distinct from `streamInput()`, which sends messages within a single running subprocess — `streamInput()` is used for `AskUserQuestion` responses within a step, not for step-to-step advancement.
+
+**Implication for CliDriver:** The current `CliDriver.startSession()` can only be called when state is `'idle'`. The orchestration loop (#013) will need to create a new `CliDriver` instance per step (or add a `reset()` method). Each instance uses `resume: sessionId` to continue the same conversation. This is a design detail for #013, not a context strategy concern.
+
 ### What the Orchestrator Does
 
-1. **Start:** Call `query()` with the first step's prompt and the agent's worktree as `cwd`
-2. **Advance:** For each subsequent step, call `query()` with `resume: previousSessionId` and the new step's prompt
+1. **Start:** Call `query()` with the first step's prompt and the agent's worktree as `cwd`. Capture `sessionId` from the `system/init` event.
+2. **Advance:** For each subsequent step, create a new `query()` call with `resume: sessionId` and the new step's prompt. The SDK loads prior conversation from disk.
 3. **Observe (optional):** Listen for `compact_boundary` events to log when compaction occurs — useful for debugging but no action required
 4. **Track:** The agent state machine tracks which steps are complete (for UI display and crash recovery), but this is independent of context management
 
@@ -137,15 +150,15 @@ Prior context is already in the session. The generator's job is purely to articu
 - Step completion tracking is for the orchestrator's state machine, not for context management
 
 ### #013 Orchestration Loop
-- Loop calls `query()` with `resume: sessionId` for each step
+- Loop calls `query()` with `resume: sessionId` for each step (new `CliDriver` instance or reset per step)
 - No context assembly step between steps
 
 ---
 
 ## Key References
 
-- [Agent SDK sessions docs](https://platform.claude.com/docs/en/agent-sdk/sessions)
-- [Context windows - Claude API docs](https://platform.claude.com/docs/en/build-with-claude/context-windows)
-- [Compaction - Claude API docs](https://platform.claude.com/docs/en/build-with-claude/compaction)
-- [Agent SDK cost tracking](https://platform.claude.com/docs/en/agent-sdk/cost-tracking)
+- [Agent SDK sessions docs](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/sdk#sessions)
+- [Context windows - Claude API docs](https://docs.anthropic.com/en/docs/build-with-claude/context-windows)
+- [Compaction - Claude API docs](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)
+- [Agent SDK reference](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/sdk)
 - Spike #003 decision doc: `docs/spike-003-cli-interaction-model.md`
