@@ -100,6 +100,19 @@ describe('generateStepPrompt', () => {
     expect(prompt).toContain('Review & Ship')
   })
 
+  it('handles multi-line card descriptions', () => {
+    const multiLineDesc = [
+      'Generate prompts for each runbook step.',
+      '',
+      '**Acceptance Criteria:**',
+      '- Takes a parsed runbook step',
+      '- Prompts include completion signaling'
+    ].join('\n')
+    const prompt = generateStepPrompt(makeContext({ cardDescription: multiLineDesc }))
+    expect(prompt).toContain('**Acceptance Criteria:**')
+    expect(prompt).toContain('- Takes a parsed runbook step')
+  })
+
   it('returns a non-empty string', () => {
     const prompt = generateStepPrompt(makeContext())
     expect(prompt.length).toBeGreaterThan(0)

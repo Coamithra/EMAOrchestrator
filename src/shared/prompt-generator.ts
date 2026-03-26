@@ -16,7 +16,12 @@ export interface StepPromptContext {
   phaseIndex: number
   /** Total number of phases in the runbook. */
   totalPhases: number
-  /** 0-based index of the current step within its phase. */
+  /**
+   * 0-based index of the current step within its phase.
+   * This parallels `RunbookStep.index` (which is 1-based) — the generator
+   * converts to 1-based for display. Both values are provided by the
+   * orchestrator from the state machine snapshot.
+   */
   stepIndex: number
   /** Total number of steps in the current phase. */
   totalStepsInPhase: number
