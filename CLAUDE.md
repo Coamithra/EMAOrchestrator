@@ -52,6 +52,16 @@ Wraps `git worktree` commands into an async service. Stateless exported function
 - **`cleanupOrphanedWorktrees(repoPath)`** — Removes all orphans and their branches.
 - **Shared types:** `src/shared/worktree.ts` defines `WorktreeInfo` for use across main and renderer.
 
+### Step Prompt Generator (`src/main/prompt-generator.ts`)
+
+Pure function that transforms a parsed `RunbookStep` + card context into a Claude prompt string. Called by the orchestration loop to generate the prompt for each step.
+
+- **`generateStepPrompt(context)`** — Takes a `StepPromptContext` and returns a prompt string ready for `CliSessionOptions.prompt`.
+- **Position header:** Each prompt starts with "Phase X of Y: PhaseName — Step Z of W" so Claude knows where it is in the workflow.
+- **First-step card context:** The Trello card name, description, branch, and worktree path are included only in the very first prompt. Subsequent prompts omit this since the long-lived session already has it (per spike #009).
+- **Completion signal:** Each prompt ends with a request for a brief summary, so the orchestrator can log step outcomes.
+- **Shared types:** `src/shared/prompt-generator.ts` defines `StepPromptContext` for use across main and renderer.
+
 ### Agent State Machine (`src/main/agent-state-machine.ts`)
 
 Tracks a single agent's lifecycle as it works through a parsed runbook. Higher-level than the CliDriver state machine — this orchestrates progress through runbook phases and steps.
