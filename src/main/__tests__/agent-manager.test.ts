@@ -77,7 +77,7 @@ describe('AgentManager', () => {
       const mgr = new AgentManager()
       await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
 
-      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat/agent-manager')
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-agent-manager')
     })
 
     it('emits agent:created with a snapshot', async () => {
@@ -91,7 +91,7 @@ describe('AgentManager', () => {
       const snapshot: AgentSnapshot = handler.mock.calls[0][0]
       expect(snapshot.id).toBe(id)
       expect(snapshot.card).toEqual(testCard)
-      expect(snapshot.worktree.branch).toBe('feat/agent-manager')
+      expect(snapshot.worktree.branch).toBe('feat-agent-manager')
       expect(snapshot.stateSnapshot.state).toBe('idle')
       expect(snapshot.sessionId).toBeNull()
     })
@@ -115,7 +115,7 @@ describe('AgentManager', () => {
         twoPhaseRunbook,
         repoPath
       )
-      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat/cli-driver')
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-cli-driver')
 
       mockCreateWorktree.mockClear()
       await mgr.createAgent(
@@ -123,7 +123,38 @@ describe('AgentManager', () => {
         twoPhaseRunbook,
         repoPath
       )
-      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat/error-handling-recovery')
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-error-handling-recovery')
+    })
+
+    it('handles card names without a number prefix', async () => {
+      const mgr = new AgentManager()
+      await mgr.createAgent(
+        { id: '1', name: 'Agent manager', description: '' },
+        twoPhaseRunbook,
+        repoPath
+      )
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-agent-manager')
+    })
+
+    it('does not register agent if worktree creation fails', async () => {
+      mockCreateWorktree.mockRejectedValueOnce(new Error('directory exists'))
+      const mgr = new AgentManager()
+
+      await expect(mgr.createAgent(testCard, twoPhaseRunbook, repoPath)).rejects.toThrow(
+        'directory exists'
+      )
+      expect(mgr.size).toBe(0)
+    })
+
+    it('rolls back worktree if state machine constructor throws', async () => {
+      const badRunbook: Runbook = { phases: [] }
+      const mgr = new AgentManager()
+
+      await expect(mgr.createAgent(testCard, badRunbook, repoPath)).rejects.toThrow(
+        'at least one phase'
+      )
+      expect(mgr.size).toBe(0)
+      expect(mockRemoveWorktree).toHaveBeenCalledOnce()
     })
   })
 

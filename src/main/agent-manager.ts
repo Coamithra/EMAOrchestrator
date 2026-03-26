@@ -29,14 +29,27 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
    * Create a new agent for a Trello card.
    *
    * Creates a git worktree, instantiates a state machine from the runbook,
-   * and registers the agent. Returns the agent ID.
+   * and registers the agent. Returns the agent ID. If the state machine
+   * constructor throws (bad runbook), the worktree is cleaned up.
    */
   async createAgent(card: CardInfo, runbook: Runbook, repoPath: string): Promise<string> {
     const branch = this.branchNameFromCard(card.name)
     const worktree = await createWorktree(repoPath, branch)
-    const stateMachine = new AgentStateMachine(runbook)
-    const id = randomUUID()
 
+    let stateMachine: AgentStateMachine
+    try {
+      stateMachine = new AgentStateMachine(runbook)
+    } catch (err) {
+      // Rollback: remove the worktree we just created
+      try {
+        await removeWorktree(repoPath, worktree)
+      } catch {
+        // Best-effort cleanup
+      }
+      throw err
+    }
+
+    const id = randomUUID()
     const entry: AgentEntry = { id, card, worktree, stateMachine, sessionId: null }
     this.agents.set(id, entry)
     this.wireStateMachineEvents(entry)
@@ -55,10 +68,10 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
       throw new Error(`Unknown agent: ${agentId}`)
     }
 
-    // Disconnect all event forwarding.
-    // Note: we pass each event name explicitly because the TypedEventEmitter
-    // wrapper passes `undefined` to Node's removeAllListeners() when called
-    // with no args, which is a no-op in Node.
+    // Disconnect all event forwarding by name. We pass each event explicitly
+    // because TypedEventEmitter.removeAllListeners() with no args forwards
+    // `undefined` to Node's EventEmitter, which treats it differently from
+    // a truly absent argument and may not remove all listeners.
     for (const event of [
       'state:changed',
       'step:advanced',
@@ -154,7 +167,11 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
 
   /**
    * Derive a branch name from a Trello card name.
-   * "#011 Agent manager" → "feat/agent-manager"
+   * "#011 Agent manager" → "feat-agent-manager"
+   *
+   * Uses hyphens instead of slashes so the worktree manager can create
+   * a flat sibling directory (e.g., `../feat-agent-manager/`). Slashed
+   * branch names like `feat/xxx` would create nested directories.
    */
   private branchNameFromCard(cardName: string): string {
     // Strip the card number prefix (e.g. "#011 ")
@@ -164,6 +181,6 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
-    return `feat/${slug}`
+    return `feat-${slug}`
   }
 }
