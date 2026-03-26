@@ -39,7 +39,7 @@ Wraps `git worktree` commands into an async service. Stateless exported function
 
 - **`createWorktree(repoPath, branch)`** — Creates worktree + new branch from main. Reuses branch if it already exists.
 - **`listWorktrees(repoPath)`** — Parses `git worktree list --porcelain` into typed `WorktreeInfo[]`.
-- **`removeWorktree(repoPath, branch)`** — Removes worktree, prunes, deletes branch.
+- **`removeWorktree(repoPath, worktree)`** — Removes worktree by `WorktreeInfo`, prunes, deletes branch.
 - **`getOrphanedWorktrees(repoPath)`** — Returns all non-main worktrees (orphans on startup).
 - **`cleanupOrphanedWorktrees(repoPath)`** — Removes all orphans and their branches.
 - **Shared types:** `src/shared/worktree.ts` defines `WorktreeInfo` for use across main and renderer.
