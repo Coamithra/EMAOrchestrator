@@ -41,6 +41,16 @@ describe('AgentStateMachine', () => {
       expect(() => new AgentStateMachine(bad)).toThrow('collides with a fixed state')
     })
 
+    it('throws on duplicate phase names', () => {
+      const bad: Runbook = {
+        phases: [
+          { name: 'Build', steps: [{ phase: 'Build', index: 1, title: 'a', description: '' }] },
+          { name: 'Build', steps: [{ phase: 'Build', index: 1, title: 'b', description: '' }] }
+        ]
+      }
+      expect(() => new AgentStateMachine(bad)).toThrow('duplicate phase name')
+    })
+
     it('exposes phase names', () => {
       const sm = new AgentStateMachine(simpleRunbook)
       expect(sm.getPhaseNames()).toEqual(['Planning', 'Implementation', 'Review'])
@@ -168,6 +178,21 @@ describe('AgentStateMachine', () => {
       expect(sm.getSnapshot().stepIndex).toBe(1)
     })
 
+    it('can advanceStep after resuming and complete the phase', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.transition('picking_card')
+      sm.transition('Planning')
+      sm.advanceStep() // complete step 0, now on step 1
+
+      sm.setWaitingForHuman()
+      sm.resumeFromWaiting()
+
+      // Should be able to advance step 1 and complete Planning
+      sm.advanceStep() // step 1 done → Implementation
+      expect(sm.getState()).toBe('Implementation')
+      expect(sm.getSnapshot().completedSteps).toBe(2)
+    })
+
     it('rejects setWaitingForHuman when not in a phase', () => {
       const sm = new AgentStateMachine(simpleRunbook)
       expect(() => sm.setWaitingForHuman()).toThrow('not in a phase state')
@@ -223,21 +248,45 @@ describe('AgentStateMachine', () => {
       expect(sm.getSnapshot().error).toBeUndefined()
     })
 
-    it('can retry from error back into a phase', () => {
+    it('can retry from error back into a phase and complete it correctly', () => {
       const sm = new AgentStateMachine(simpleRunbook)
       sm.on('error', () => {})
       sm.transition('picking_card')
       sm.transition('Planning')
       sm.advanceStep() // 1 step done
-      sm.setError('oops')
+      expect(sm.getSnapshot().completedSteps).toBe(1)
 
+      sm.setError('oops')
       sm.transition('Planning')
       expect(sm.getState()).toBe('Planning')
-      expect(sm.getSnapshot().stepIndex).toBe(0) // reset to start of phase
+      expect(sm.getSnapshot().stepIndex).toBe(0)
+      expect(sm.getSnapshot().completedSteps).toBe(0) // reset for this phase
+
+      // Must advance through ALL steps in the phase (not complete early)
+      sm.advanceStep() // step 0 done, advance to step 1
+      expect(sm.getState()).toBe('Planning') // still in Planning
+      sm.advanceStep() // step 1 done, phase complete → Implementation
+      expect(sm.getState()).toBe('Implementation')
+      expect(sm.getSnapshot().completedSteps).toBe(2)
+    })
+
+    it('rejects setError from picking_card', () => {
+      const sm = new AgentStateMachine(simpleRunbook)
+      sm.transition('picking_card')
+      expect(() => sm.setError('nope')).toThrow('not in a phase or waiting state')
     })
   })
 
   describe('done state', () => {
+    it('resets phaseIndex to -1 on done', () => {
+      const sm = new AgentStateMachine(minimalRunbook)
+      sm.transition('picking_card')
+      sm.transition('Only Phase')
+      sm.advanceStep()
+      expect(sm.getState()).toBe('done')
+      expect(sm.getSnapshot().phaseIndex).toBe(-1)
+    })
+
     it('can go from done back to idle', () => {
       const sm = new AgentStateMachine(minimalRunbook)
       sm.transition('picking_card')

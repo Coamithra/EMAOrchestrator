@@ -3,9 +3,10 @@ export type FixedAgentState = 'idle' | 'picking_card' | 'error' | 'waiting_for_h
 
 /**
  * Agent state is either a fixed state or a dynamic phase name derived from the runbook.
- * Represented as a string since dynamic phases are only known at runtime.
+ * The `(string & {})` arm preserves autocomplete for fixed states while allowing
+ * dynamic phase names that are only known at runtime.
  */
-export type AgentState = string
+export type AgentState = FixedAgentState | (string & {})
 
 /** Progress tracker for an individual step within a phase. */
 export interface AgentStepProgress {
@@ -19,7 +20,7 @@ export interface AgentStepProgress {
 /** Point-in-time snapshot of the full agent state, suitable for UI rendering. */
 export interface AgentStateSnapshot {
   state: AgentState
-  phaseIndex: number // -1 when in a fixed state
+  phaseIndex: number // -1 when not in a phase
   stepIndex: number // -1 when not actively in a step
   totalPhases: number
   totalSteps: number

@@ -1,7 +1,11 @@
 import type { Runbook } from '../shared/runbook'
-import type { AgentState, AgentStateSnapshot, AgentStepProgress } from '../shared/agent-state'
+import type {
+  AgentState,
+  AgentStateMachineEvents,
+  AgentStateSnapshot,
+  AgentStepProgress
+} from '../shared/agent-state'
 import { TypedEventEmitter } from './typed-emitter'
-import type { AgentStateMachineEvents } from '../shared/agent-state'
 
 const FIXED_STATES = new Set(['idle', 'picking_card', 'error', 'waiting_for_human', 'done'])
 
@@ -41,11 +45,16 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
     this.totalSteps = runbook.phases.reduce((sum, p) => sum + p.steps.length, 0)
     this.completedStepCounts = new Array(runbook.phases.length).fill(0)
 
-    // Validate no phase name collides with a fixed state
+    // Validate phase names
+    const seen = new Set<string>()
     for (const name of this.phaseNames) {
       if (FIXED_STATES.has(name)) {
         throw new Error(`Runbook phase name "${name}" collides with a fixed state`)
       }
+      if (seen.has(name)) {
+        throw new Error(`Runbook contains duplicate phase name "${name}"`)
+      }
+      seen.add(name)
     }
 
     this.validTransitions = this.buildTransitionMap()
@@ -139,6 +148,9 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
     // Update phase/step tracking
     const phaseIdx = this.phaseNames.indexOf(to)
     if (phaseIdx !== -1) {
+      // Reset per-phase counter and adjust global count (handles error retry correctly)
+      this.completedSteps -= this.completedStepCounts[phaseIdx]
+      this.completedStepCounts[phaseIdx] = 0
       this.phaseIndex = phaseIdx
       this.stepIndex = 0
       this.errorMessage = undefined
@@ -150,6 +162,7 @@ export class AgentStateMachine extends TypedEventEmitter<AgentStateMachineEvents
       this.errorMessage = undefined
       this.stateBeforeWaiting = undefined
     } else if (to === 'done') {
+      this.phaseIndex = -1
       this.stepIndex = -1
       this.errorMessage = undefined
     } else {
