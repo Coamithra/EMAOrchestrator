@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { AppConfig } from '@shared/config'
+import type { AgentSnapshot } from '@shared/agent-manager'
 import TopBar from './components/TopBar'
 import Settings from './components/Settings'
+import MainLayout from './components/MainLayout'
 
 type View = 'loading' | 'settings' | 'main'
 
 function App(): React.JSX.Element {
   const [view, setView] = useState<View>('loading')
   const [config, setConfig] = useState<AppConfig | null>(null)
+  const [agents, setAgents] = useState<AgentSnapshot[]>([])
 
   useEffect(() => {
     window.api
@@ -27,10 +30,23 @@ function App(): React.JSX.Element {
       })
   }, [])
 
+  // Load agents when entering main view
+  useEffect(() => {
+    if (view !== 'main') return
+    window.api
+      .listAgents()
+      .then(setAgents)
+      .catch(() => setAgents([]))
+  }, [view])
+
   function handleConfigSaved(cfg: AppConfig): void {
     setConfig(cfg)
     setView('main')
   }
+
+  const handleNewAgentClick = useCallback(() => {
+    // Will be wired to the new-agent launcher dialog (#020)
+  }, [])
 
   if (view === 'loading') {
     return <div style={{ padding: '2rem', color: 'var(--ev-c-text-2)' }}>Loading...</div>
@@ -49,13 +65,8 @@ function App(): React.JSX.Element {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <TopBar onSettingsClick={() => setView('settings')} />
-      <div style={{ padding: '2rem' }}>
-        <h1>EMAOrchestrator</h1>
-        <p style={{ color: 'var(--ev-c-text-2)' }}>
-          Target repo: {config?.targetRepoPath || '(not set)'}
-        </p>
-      </div>
+      <TopBar onNewAgentClick={handleNewAgentClick} onSettingsClick={() => setView('settings')} />
+      <MainLayout agents={agents} />
     </div>
   )
 }

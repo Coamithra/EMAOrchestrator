@@ -1,0 +1,28 @@
+.main-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.main-layout__sidebar {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.main-layout__resize-handle {
+  flex-shrink: 0;
+  width: 4px;
+  cursor: col-resize;
+  background: var(--ev-c-gray-3);
+  transition: background 0.15s;
+}
+
+.main-layout__resize-handle:hover,
+.main-layout__resize-handle--dragging {
+  background: var(--ev-c-gray-1);
+}
+
+.main-layout__detail {
+  flex: 1;
+  min-width: 0;
+}

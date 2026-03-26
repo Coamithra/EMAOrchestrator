@@ -7,6 +7,12 @@
   background: var(--color-background-soft);
   border-bottom: 1px solid var(--ev-c-gray-3);
   -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+
+.topbar__left {
+  display: flex;
+  align-items: center;
 }
 
 .topbar__title {
@@ -15,19 +21,30 @@
   color: var(--color-text);
 }
 
-.topbar__settings {
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar__button {
   -webkit-app-region: no-drag;
   background: none;
   border: none;
   color: var(--ev-c-text-2);
-  font-size: 20px;
+  font-size: 12px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border-radius: 4px;
   line-height: 1;
 }
 
-.topbar__settings:hover {
+.topbar__button:hover {
   color: var(--color-text);
   background: var(--ev-c-gray-3);
+}
+
+.topbar__button--icon {
+  font-size: 20px;
+  padding: 4px 8px;
 }
