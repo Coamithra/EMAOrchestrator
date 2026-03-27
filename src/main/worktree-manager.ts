@@ -54,7 +54,7 @@ export async function listWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
 }
 
 /**
- * Create a new worktree with a new branch based on main.
+ * Create a new worktree with a new branch based on the repo's default branch.
  *
  * By default, the worktree is created as a sibling to the repo directory:
  *   repoPath = C:\Proj\main  →  worktree at C:\Proj\<branch>
@@ -93,8 +93,9 @@ export async function createWorktree(
       cwd: repoPath
     })
   } else {
-    // Create new branch from main
-    await execFileAsync('git', ['worktree', 'add', worktreePath, '-b', branch, 'main'], {
+    // Create new branch from the repo's default branch
+    const defaultBranch = await getDefaultBranch(repoPath)
+    await execFileAsync('git', ['worktree', 'add', worktreePath, '-b', branch, defaultBranch], {
       cwd: repoPath
     })
   }
@@ -171,6 +172,21 @@ export async function cleanupOrphanedWorktrees(
   }
 
   return orphans
+}
+
+/**
+ * Detect the default branch of the repo (e.g. main, master).
+ * Checks HEAD's symbolic ref first, falls back to 'main'.
+ */
+async function getDefaultBranch(repoPath: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync('git', ['symbolic-ref', '--short', 'HEAD'], {
+      cwd: repoPath
+    })
+    return stdout.trim()
+  } catch {
+    return 'main'
+  }
 }
 
 async function doesBranchExist(repoPath: string, branch: string): Promise<boolean> {

@@ -14,6 +14,7 @@ function App(): React.JSX.Element {
   const [view, setView] = useState<View>('loading')
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [agents, setAgents] = useState<AgentSnapshot[]>([])
+  const [runningAgentIds, setRunningAgentIds] = useState<Set<string>>(new Set())
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false)
 
   useEffect(() => {
@@ -53,19 +54,39 @@ function App(): React.JSX.Element {
         // state-changed delivers the full AgentStateSnapshot, covering phase
         // transitions, step progress, errors, and done — making separate
         // handlers for step-advanced/step-completed/error/done unnecessary.
-        case 'agent:state-changed':
+        case 'agent:state-changed': {
+          const newState = event.data.stateSnapshot.state
+          const agentId = event.data.agentId
           setAgents((prev) =>
             prev.map((a) => {
-              if (a.id !== event.data.agentId) return a
+              if (a.id !== agentId) return a
               const updated: AgentSnapshot = { ...a, stateSnapshot: event.data.stateSnapshot }
               // Clear pendingHumanInteraction when agent exits waiting state
-              if (event.data.stateSnapshot.state !== 'waiting_for_human') {
+              if (newState !== 'waiting_for_human') {
                 updated.pendingHumanInteraction = null
               }
               return updated
             })
           )
+          // Update running status based on state
+          const terminalStates = new Set(['idle', 'done', 'error'])
+          if (terminalStates.has(newState)) {
+            setRunningAgentIds((prev) => {
+              if (!prev.has(agentId)) return prev
+              const next = new Set(prev)
+              next.delete(agentId)
+              return next
+            })
+          } else if (newState !== 'waiting_for_human') {
+            setRunningAgentIds((prev) => {
+              if (prev.has(agentId)) return prev
+              const next = new Set(prev)
+              next.add(agentId)
+              return next
+            })
+          }
           break
+        }
 
         case 'agent:destroyed':
           setAgents((prev) => prev.filter((a) => a.id !== event.data.agentId))
@@ -114,7 +135,21 @@ function App(): React.JSX.Element {
     // between subscribe and fetch resolve are handled via dedup in agent:created.
     window.api
       .listAgents()
-      .then(setAgents)
+      .then(async (loadedAgents) => {
+        setAgents(loadedAgents)
+        // Check which agents are currently running
+        const running = new Set<string>()
+        for (const a of loadedAgents) {
+          try {
+            if (await window.api.isOrchestrationRunning(a.id)) {
+              running.add(a.id)
+            }
+          } catch {
+            // ignore
+          }
+        }
+        setRunningAgentIds(running)
+      })
       .catch(() => setAgents([]))
 
     return unsubscribe
@@ -135,6 +170,28 @@ function App(): React.JSX.Element {
       await window.api.startOrchestration(agentId)
     } catch {
       // Agent was created but start failed — it'll show as idle in the sidebar
+    }
+  }, [])
+
+  const handleResumeAgent = useCallback(async (agentId: string) => {
+    try {
+      await window.api.startOrchestration(agentId)
+      setRunningAgentIds((prev) => new Set(prev).add(agentId))
+    } catch {
+      // Start failed — agent stays in current state
+    }
+  }, [])
+
+  const handleStopAgent = useCallback(async (agentId: string) => {
+    try {
+      await window.api.stopOrchestration(agentId)
+      setRunningAgentIds((prev) => {
+        const next = new Set(prev)
+        next.delete(agentId)
+        return next
+      })
+    } catch {
+      // Stop failed
     }
   }, [])
 
@@ -176,7 +233,12 @@ function App(): React.JSX.Element {
         onSettingsClick={handleSettingsClick}
         onRunbookClick={handleRunbookClick}
       />
-      <MainLayout agents={agents} />
+      <MainLayout
+        agents={agents}
+        runningAgentIds={runningAgentIds}
+        onResumeAgent={handleResumeAgent}
+        onStopAgent={handleStopAgent}
+      />
       {showNewAgentDialog && (
         <NewAgentDialog
           onCreated={handleAgentCreated}

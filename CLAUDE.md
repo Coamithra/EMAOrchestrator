@@ -43,6 +43,9 @@ Wraps the Agent SDK's `query()` into an EventEmitter-based service. One `CliDriv
 - **Permission pause/resume:** `canUseTool` callback creates a deferred Promise that blocks the SDK generator until `respondToPermission()` is called. This bridges the async callback to the Electron IPC/UI flow.
 - **AskUserQuestion:** Detected as `tool_use` blocks with `name === 'AskUserQuestion'` in `SDKAssistantMessage`. Response sent via `query.streamInput()`.
 - **Session resumption:** Pass a previous `sessionId` to `CliSessionOptions` to resume a conversation.
+- **Streaming output:** `includePartialMessages: true` is required in the SDK query options to receive `stream_event` messages (typed as `SDKPartialAssistantMessage`). Without it, only full `assistant` messages are yielded and the terminal stays blank.
+- **Claude CLI resolution:** The SDK's built-in `cli.js` path resolution can fail in Electron contexts. The driver explicitly resolves the system `claude` binary via `where`/`which` at module load and passes it as `pathToClaudeCodeExecutable`.
+- **Newline handling:** A `\n` is emitted before each `content_block_start` (text type) so successive text segments separated by tool calls don't run together in the terminal.
 - **Shared types:** `src/shared/cli-driver.ts` defines all event/state types for use across main process and renderer.
 
 ### Trello Service (`src/main/trello-service.ts`)
@@ -62,7 +65,7 @@ Stateless exported functions for Trello REST API operations. Uses native `fetch(
 
 Wraps `git worktree` commands into an async service. Stateless exported functions (same pattern as config-service). One worktree per agent session, created as siblings to the main repo directory.
 
-- **`createWorktree(repoPath, branch, basePath?)`** — Creates worktree + new branch from main. Reuses branch if it already exists. Optional `basePath` overrides the default sibling-to-repo location.
+- **`createWorktree(repoPath, branch, basePath?)`** — Creates worktree + new branch from the repo's default branch (auto-detected via `git symbolic-ref`, falls back to `main`). Reuses branch if it already exists. Optional `basePath` overrides the default sibling-to-repo location.
 - **`listWorktrees(repoPath)`** — Parses `git worktree list --porcelain` into typed `WorktreeInfo[]`.
 - **`removeWorktree(repoPath, worktree)`** — Removes worktree by `WorktreeInfo`, prunes, deletes branch.
 - **`getOrphanedWorktrees(repoPath)`** — Returns all non-main worktrees (orphans on startup).
@@ -211,10 +214,10 @@ Main panel for viewing a selected agent's state and output. Composes two sub-com
 
 - **`TerminalView`** (`src/renderer/src/components/TerminalView.tsx`) — xterm.js wrapper that renders streaming CLI output. Subscribes to `cli:event` IPC channel, filtering by session ID `orchestration-<agentId>`. Writes `stream:text` deltas to the terminal. Uses `@xterm/addon-fit` with a ResizeObserver for responsive sizing. Terminal instance is created/disposed per agent ID change.
 - **`StepProgress`** (`src/renderer/src/components/StepProgress.tsx`) — Collapsible phase/step progress indicator. Shows each runbook phase with expand/collapse, and each step with status icons (pending/running/done) and completion summaries. Current active phase auto-expands. Derives state from `AgentStateSnapshot` + `StepCompletionRecord[]` + the agent's `Runbook`.
-- **`PermissionDialog`** (`src/renderer/src/components/PermissionDialog.tsx`) — Modal overlay for permission requests. Shows tool name, description, and tool input as formatted JSON. Allow/Deny buttons call `respondToOrchestrationPermission()` via IPC. Rendered inside the terminal container when `cli:event` delivers a `permission:request` event.
-- **`QuestionDialog`** (`src/renderer/src/components/QuestionDialog.tsx`) — Modal overlay for `AskUserQuestion` tool calls. Shows the question text and a text input. Submit calls `respondToOrchestrationQuestion()` via IPC. Enter key submits (Shift+Enter for newline).
-- **Permission/question event tracking:** `AgentDetailPanel` subscribes to `cli:event` (filtered by `sessionId === 'orchestration-<agentId>'`) to receive `PermissionRequest` and `UserQuestionRequest` data in real-time. Dialogs are cleared when the agent exits `waiting_for_human` state or on agent switch.
-- **Header:** Card name, phase/step label, and a "waiting for input" badge when `pendingHumanInteraction` is set.
+- **`PermissionDialog`** (`src/renderer/src/components/PermissionDialog.tsx`) — Modal overlay for permission requests. Shows tool name, description, and tool input as formatted JSON. Allow/Deny buttons call `respondToOrchestrationPermission()` via IPC. Non-dismissable — cannot be closed by clicking outside or pressing Escape (prevents accidental denial that strands the agent).
+- **`QuestionDialog`** (`src/renderer/src/components/QuestionDialog.tsx`) — Modal overlay for `AskUserQuestion` tool calls. Shows the question text and a text input. Submit calls `respondToOrchestrationQuestion()` via IPC. Enter key submits (Shift+Enter for newline). Non-dismissable like PermissionDialog.
+- **Permission/question event tracking:** `AgentDetailPanel` subscribes to `cli:event` (filtered by `sessionId === 'orchestration-<agentId>'`) to receive `PermissionRequest` and `UserQuestionRequest` data in real-time. Dialogs are also seeded from `agent.pendingHumanInteraction` on mount so they appear immediately when switching to an agent already waiting for input. Dialogs are cleared when the agent exits `waiting_for_human` state or on agent switch.
+- **Header:** Card name, phase/step label, "waiting for input" badge when `pendingHumanInteraction` is set, Resume button (when agent is not running and not done), and Stop button (when running).
 - **Sidebar notification:** A pulsing "!" badge appears on sidebar agent items when `stateSnapshot.state === 'waiting_for_human'`.
 - **`AgentSnapshot.runbook`:** The full `Runbook` is included in `AgentSnapshot` so the renderer has phase/step names without an extra IPC call.
 - **`pendingHumanInteraction` sync:** `App.tsx` clears `pendingHumanInteraction` to `null` on `agent:state-changed` events when the new state is not `waiting_for_human`, keeping the badge in sync without needing a separate event.

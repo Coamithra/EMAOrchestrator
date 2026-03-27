@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import type { PermissionRequest, PermissionResponse } from '@shared/cli-driver'
 import './PermissionDialog.css'
 
@@ -24,21 +24,12 @@ function PermissionDialog({ request, onRespond }: PermissionDialogProps): React.
     onRespond({ requestId: request.requestId, behavior: 'deny' })
   }, [request.requestId, onRespond])
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent): void {
-      if (e.key === 'Escape') handleDeny()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleDeny])
-
   return (
     <div
       className="interaction-dialog"
       role="dialog"
       aria-modal="true"
       aria-label="Permission request"
-      onClick={handleDeny}
     >
       <div className="interaction-dialog__card" onClick={(e) => e.stopPropagation()}>
         <div className="interaction-dialog__header">

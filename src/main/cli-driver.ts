@@ -1,7 +1,26 @@
 import { randomUUID } from 'crypto'
 import type { UUID } from 'crypto'
+import { execFileSync } from 'child_process'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { Query, PermissionResult, SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+
+/** Resolve the system-installed claude CLI path once at module load. */
+let resolvedClaudePath: string | undefined
+function getClaudePath(): string | undefined {
+  if (resolvedClaudePath !== undefined) return resolvedClaudePath || undefined
+  try {
+    resolvedClaudePath = execFileSync(
+      process.platform === 'win32' ? 'where' : 'which',
+      ['claude'],
+      { encoding: 'utf-8' }
+    )
+      .split('\n')[0]
+      .trim()
+  } catch {
+    resolvedClaudePath = ''
+  }
+  return resolvedClaudePath || undefined
+}
 import { TypedEventEmitter } from './typed-emitter'
 import type {
   CliDriverState,
@@ -63,7 +82,9 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
         resume: options.sessionId,
         model: options.model,
         maxTurns: options.maxTurns,
-        systemPrompt: options.systemPrompt
+        systemPrompt: options.systemPrompt,
+        includePartialMessages: true,
+        pathToClaudeCodeExecutable: getClaudePath()
       }
     })
 
@@ -203,6 +224,15 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
   private handleStreamEvent(message: SDKMessage & { type: 'stream_event' }): void {
     const event = message.event as Record<string, unknown> | undefined
     if (!event) return
+
+    // Insert a newline before new content blocks so successive text segments
+    // (separated by tool calls) don't run together in the terminal.
+    if (event.type === 'content_block_start') {
+      const contentBlock = event.content_block as Record<string, unknown> | undefined
+      if (contentBlock?.type === 'text') {
+        this.emit('stream:text', { text: '\n' })
+      }
+    }
 
     if (event.type === 'content_block_delta') {
       const delta = event.delta as Record<string, unknown> | undefined

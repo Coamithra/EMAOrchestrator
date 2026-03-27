@@ -10,9 +10,12 @@ const MAX_SIDEBAR_WIDTH = 480
 
 interface MainLayoutProps {
   agents: AgentSnapshot[]
+  runningAgentIds: Set<string>
+  onResumeAgent: (agentId: string) => void
+  onStopAgent: (agentId: string) => void
 }
 
-function MainLayout({ agents }: MainLayoutProps): React.JSX.Element {
+function MainLayout({ agents, runningAgentIds, onResumeAgent, onStopAgent }: MainLayoutProps): React.JSX.Element {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -100,7 +103,12 @@ function MainLayout({ agents }: MainLayoutProps): React.JSX.Element {
         onKeyDown={handleKeyDown}
       />
       <div className="main-layout__detail">
-        <AgentDetailPanel agent={selectedAgent} />
+        <AgentDetailPanel
+          agent={selectedAgent}
+          isRunning={selectedAgentId ? runningAgentIds.has(selectedAgentId) : false}
+          onResume={onResumeAgent}
+          onStop={onStopAgent}
+        />
       </div>
     </div>
   )

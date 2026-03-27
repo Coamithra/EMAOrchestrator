@@ -43,15 +43,49 @@
   margin-top: 2px;
 }
 
-.agent-detail-panel__waiting-badge {
+.agent-detail-panel__header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.agent-detail-panel__waiting-badge {
   padding: 3px 8px;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
   background: rgba(250, 204, 21, 0.15);
   color: #facc15;
-  margin-left: 12px;
+}
+
+.agent-detail-panel__resume-btn,
+.agent-detail-panel__stop-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agent-detail-panel__resume-btn {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.agent-detail-panel__resume-btn:hover {
+  background: rgba(74, 222, 128, 0.25);
+}
+
+.agent-detail-panel__stop-btn {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.agent-detail-panel__stop-btn:hover {
+  background: rgba(248, 113, 113, 0.25);
 }
 
 /* Body: progress sidebar + terminal */

@@ -31,16 +31,6 @@ function QuestionDialog({ request, onRespond }: QuestionDialogProps): React.JSX.
     [handleSubmit]
   )
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent): void {
-      if (e.key === 'Escape') {
-        onRespond({ requestId: request.requestId, answer: '' })
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [request.requestId, onRespond])
-
   return (
     <div
       className="interaction-dialog"

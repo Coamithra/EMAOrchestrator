@@ -11,6 +11,9 @@ import './AgentDetailPanel.css'
 
 interface AgentDetailPanelProps {
   agent: AgentSnapshot | null
+  isRunning?: boolean
+  onResume?: (agentId: string) => void
+  onStop?: (agentId: string) => void
 }
 
 function toPhaseInfos(agent: AgentSnapshot): PhaseInfo[] {
@@ -33,20 +36,54 @@ function getStateLabel(agent: AgentSnapshot): string {
   return String(stateSnapshot.state)
 }
 
-function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
+/** States where the agent can be resumed (not actively running, not finished). */
+function canResume(agent: AgentSnapshot, isRunning: boolean): boolean {
+  if (isRunning) return false
+  const s = agent.stateSnapshot.state
+  return s !== 'done'
+}
+
+function canStop(isRunning: boolean): boolean {
+  return isRunning
+}
+
+function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentDetailPanelProps): React.JSX.Element {
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null)
   const [pendingQuestion, setPendingQuestion] = useState<UserQuestionRequest | null>(null)
   const respondedRef = useRef(false)
 
   const agentId = agent?.id ?? null
 
-  // Subscribe to cli:event and clear state on agent switch (single effect)
+  // Subscribe to cli:event and seed dialog state from snapshot on agent switch
   useEffect(() => {
     setPendingPermission(null)
     setPendingQuestion(null)
     respondedRef.current = false
 
     if (!agentId) return
+
+    // Seed dialog from snapshot if the agent is already waiting for input.
+    // The snapshot has type + detail but not the full request object, so we
+    // construct a minimal one. The real request will replace it if the event
+    // arrives while we're subscribed.
+    if (agent?.pendingHumanInteraction) {
+      const { type, detail } = agent.pendingHumanInteraction
+      if (type === 'permission') {
+        setPendingPermission({
+          requestId: `restored-${agentId}`,
+          toolName: detail.split(':')[0] || 'Unknown tool',
+          toolInput: {},
+          toolUseId: '',
+          description: detail
+        })
+      } else if (type === 'question') {
+        setPendingQuestion({
+          requestId: `restored-${agentId}`,
+          question: detail,
+          toolUseId: ''
+        })
+      }
+    }
 
     const sessionId = `orchestration-${agentId}`
     const unsubscribe = window.api.onCliEvent((payload: CliEventPayload) => {
@@ -111,13 +148,31 @@ function AgentDetailPanel({ agent }: AgentDetailPanelProps): React.JSX.Element {
           <div className="agent-detail-panel__card-name">{agent.card.name}</div>
           <div className="agent-detail-panel__state">{getStateLabel(agent)}</div>
         </div>
-        {agent.pendingHumanInteraction && (
-          <div className="agent-detail-panel__waiting-badge">
-            {agent.pendingHumanInteraction.type === 'permission'
-              ? 'Permission required'
-              : 'Question pending'}
-          </div>
-        )}
+        <div className="agent-detail-panel__header-right">
+          {agent.pendingHumanInteraction && (
+            <div className="agent-detail-panel__waiting-badge">
+              {agent.pendingHumanInteraction.type === 'permission'
+                ? 'Permission required'
+                : 'Question pending'}
+            </div>
+          )}
+          {canResume(agent, isRunning) && (
+            <button
+              className="agent-detail-panel__resume-btn"
+              onClick={() => onResume?.(agent.id)}
+            >
+              Resume
+            </button>
+          )}
+          {canStop(isRunning) && (
+            <button
+              className="agent-detail-panel__stop-btn"
+              onClick={() => onStop?.(agent.id)}
+            >
+              Stop
+            </button>
+          )}
+        </div>
       </div>
       <div className="agent-detail-panel__body">
         <div className="agent-detail-panel__progress">
