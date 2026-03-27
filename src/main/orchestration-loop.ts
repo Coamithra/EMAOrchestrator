@@ -5,6 +5,7 @@ import { TypedEventEmitter } from './typed-emitter'
 import { moveCard, addComment, getListIdByName } from './trello-service'
 import { loadConfig } from './config-service'
 import { appendLogEntry } from './logging-service'
+import { createTrackerDoc, checkOffStep, removeTrackerDoc } from './tracker-doc-service'
 import type { AgentManager } from './agent-manager'
 import type {
   SessionResult,
@@ -275,11 +276,24 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     // Move card to In Progress (fire-and-forget)
     this.trelloMoveToInProgress(agentId).catch(() => {})
 
+    // Create tracker doc in the worktree (fire-and-forget)
+    if (agent) {
+      const runbook = this.agentManager.getRunbook(agentId)
+      if (runbook) {
+        createTrackerDoc(agent.worktree.path, agent.worktree.branch, runbook).catch(() => {})
+      }
+    }
+
     // Step loop: run steps until done, error, or stopped
     while (!entry.stopped) {
       const state = sm.getState()
 
       if (state === 'done') {
+        // Clean up tracker doc (fire-and-forget)
+        const doneAgent = this.agentManager.getAgent(agentId)
+        if (doneAgent) {
+          removeTrackerDoc(doneAgent.worktree.path, doneAgent.worktree.branch).catch(() => {})
+        }
         // Move card to Done and post summary comment (fire-and-forget)
         this.trelloCompleteCard(agentId).catch(() => {})
         const agentSnapshot = this.agentManager.getAgent(agentId)
@@ -364,6 +378,14 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       // Set summary after advance (history record now exists)
       const summary = entry.lastAssistantText.slice(-500) || 'Step completed.'
       this.agentManager.setStepSummary(agentId, completedPhaseIndex, completedStepIndex, summary)
+
+      // Check off the completed step in the tracker doc (fire-and-forget)
+      checkOffStep(
+        agent.worktree.path,
+        agent.worktree.branch,
+        completedPhaseIndex,
+        completedStepIndex
+      ).catch(() => {})
 
       if (entry.lastAssistantText) {
         this.log(agentId, {

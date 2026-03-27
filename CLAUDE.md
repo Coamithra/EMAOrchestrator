@@ -115,6 +115,17 @@ Persists agent state to `app.getPath('userData')/agents.json` so agents survive 
 - **Save triggers:** `AgentManager` auto-saves on every `state:changed` and `step:completed` event (fire-and-forget).
 - **Shared types:** `src/shared/agent-persistence.ts` defines `PersistedAgent`, `PersistedAgentStore`, `StepCompletionRecord`, `PendingHumanInteraction`, `ReconciliationResult`.
 
+### Tracker Doc Service (`src/main/tracker-doc-service.ts`)
+
+Generates and maintains the `docs/tracker_<branch>.md` file in each agent's worktree, satisfying the CONTRIBUTING.md "Before You Start" requirement. Stateless exported functions (same pattern as config-service).
+
+- **`createTrackerDoc(worktreePath, branch, runbook)`** — Generates a markdown file with all runbook phases and steps as unchecked checkboxes. Creates the `docs/` directory if needed.
+- **`checkOffStep(worktreePath, branch, phaseIndex, stepIndex)`** — Reads the tracker file, checks off the specified step (`- [ ]` → `- [x]`). No-op if the file doesn't exist.
+- **`removeTrackerDoc(worktreePath, branch)`** — Deletes the tracker file. No-op if already gone.
+- **`trackerDocPath(worktreePath, branch)`** — Returns the file path. Replaces `/` in branch names with `_` for flat filenames.
+- **`generateTrackerContent(branch, runbook)`** — Pure function that returns the markdown string (testable without I/O).
+- **Integration:** The orchestration loop calls `createTrackerDoc` on agent start, `checkOffStep` after each step completes, and `removeTrackerDoc` when the agent finishes. All calls are fire-and-forget (never block orchestration).
+
 ### Logging Service (`src/main/logging-service.ts`)
 
 Per-agent structured logging to JSONL files. Stateless exported functions (same pattern as config-service). Logs stored at `app.getPath('userData')/logs/<agentId>.jsonl`.

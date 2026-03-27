@@ -52,6 +52,12 @@ vi.mock('../agent-persistence-service', () => ({
   removePersistedAgent: mockRemovePersistedAgent
 }))
 
+vi.mock('../tracker-doc-service', () => ({
+  createTrackerDoc: vi.fn().mockResolvedValue(undefined),
+  checkOffStep: vi.fn().mockResolvedValue(undefined),
+  removeTrackerDoc: vi.fn().mockResolvedValue(undefined)
+}))
+
 import { AgentManager } from '../agent-manager'
 import { OrchestrationLoop } from '../orchestration-loop'
 
@@ -375,7 +381,9 @@ describe('OrchestrationLoop', () => {
       const loop = new OrchestrationLoop(manager, 3, 200, 50)
 
       let stuckEmitted = false
-      loop.on('agent:stuck', () => { stuckEmitted = true })
+      loop.on('agent:stuck', () => {
+        stuckEmitted = true
+      })
 
       // Session emits activity every 50ms (within the 200ms timeout)
       mockStartSession.mockImplementation(async function (this: {
