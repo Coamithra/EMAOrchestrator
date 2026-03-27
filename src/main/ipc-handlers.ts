@@ -42,18 +42,26 @@ async function resolveRunbook(config: AppConfig): Promise<Runbook> {
   if (cached) return cached
 
   let runbook: Runbook
+  let usedFallback = false
   if (parserType === 'smart') {
     try {
       runbook = await parseRunbookSmart(markdown)
     } catch (err) {
       console.error('Smart parser failed, falling back to regex:', err)
       runbook = parseRunbookContent(markdown)
+      usedFallback = true
     }
   } else {
     runbook = parseRunbookContent(markdown)
   }
 
-  cacheRunbook(markdown, parserType, runbook).catch(() => {})
+  // Don't cache regex fallback results under the 'smart' key — that would
+  // permanently prevent the smart parser from being retried.
+  if (!usedFallback) {
+    cacheRunbook(markdown, parserType, runbook).catch((err) =>
+      console.error('Cache write failed:', err)
+    )
+  }
   return runbook
 }
 

@@ -30,26 +30,44 @@ Return ONLY valid JSON matching this schema, with no markdown fences or surround
   ]
 }`
 
+const SMART_PARSE_TIMEOUT_MS = 60_000
+
 /**
  * Parse a runbook markdown document using Claude CLI (Agent SDK).
  *
  * Sends the raw markdown to Claude with a structured system prompt,
  * then extracts and validates the JSON response as a Runbook.
+ * Times out after 60 seconds to prevent indefinite hangs.
  */
 export async function parseRunbookSmart(markdown: string): Promise<Runbook> {
+  const abortController = new AbortController()
+  const timeout = setTimeout(() => abortController.abort(), SMART_PARSE_TIMEOUT_MS)
+
+  try {
+    return await doSmartParse(markdown, abortController)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function doSmartParse(
+  markdown: string,
+  abortController: AbortController
+): Promise<Runbook> {
   const textChunks: string[] = []
 
-  const handle = query({
+  const stream = query({
     prompt: `Parse the following runbook markdown into structured JSON:\n\n${markdown}`,
     options: {
       maxTurns: 1,
       systemPrompt: SYSTEM_PROMPT,
       allowedTools: [],
-      canUseTool: async () => ({ behavior: 'deny' as const, message: 'No tools allowed' })
+      canUseTool: async () => ({ behavior: 'deny' as const, message: 'No tools allowed' }),
+      abortController
     }
   })
 
-  for await (const message of handle as AsyncIterable<SDKMessage>) {
+  for await (const message of stream as AsyncIterable<SDKMessage>) {
     if (message.type === 'assistant') {
       const content = (message as { message?: { content?: unknown[] } }).message?.content
       if (Array.isArray(content)) {

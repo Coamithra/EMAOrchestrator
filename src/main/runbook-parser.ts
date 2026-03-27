@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import type { Runbook, RunbookPhase, RunbookStep } from '../shared/runbook'
 
 /**
@@ -81,10 +80,4 @@ export function parseRunbookContent(markdown: string): Runbook {
   flushPhase()
 
   return { phases }
-}
-
-/** Read a CONTRIBUTING.md file from disk and parse it. */
-export async function parseRunbookFile(filePath: string): Promise<Runbook> {
-  const content = await readFile(filePath, 'utf-8')
-  return parseRunbookContent(content)
 }
