@@ -154,6 +154,21 @@ describe('createWorktree', () => {
     )
   })
 
+  it('uses basePath instead of repo parent when provided', async () => {
+    mockAccess.mockRejectedValueOnce(new Error('ENOENT'))
+    mockExecFile.mockRejectedValueOnce(new Error('not a valid ref'))
+    mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    const result = await createWorktree('C:/Proj/main', 'feat/custom', 'D:/worktrees')
+
+    expect(result.path).toMatch(/D:.*worktrees.*feat/)
+    expect(mockExecFile).toHaveBeenCalledWith(
+      'git',
+      ['worktree', 'add', expect.stringContaining('D:'), '-b', 'feat/custom', 'main'],
+      { cwd: 'C:/Proj/main' }
+    )
+  })
+
   it('throws if worktree directory already exists', async () => {
     // access() succeeds → directory exists
     mockAccess.mockResolvedValueOnce(undefined)

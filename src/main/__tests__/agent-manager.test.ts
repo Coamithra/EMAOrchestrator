@@ -126,7 +126,7 @@ describe('AgentManager', () => {
       const mgr = new AgentManager()
       await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
 
-      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-agent-manager')
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-agent-manager', undefined)
     })
 
     it('emits agent:created with a snapshot', async () => {
@@ -164,7 +164,7 @@ describe('AgentManager', () => {
         twoPhaseRunbook,
         repoPath
       )
-      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-cli-driver')
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-cli-driver', undefined)
 
       mockCreateWorktree.mockClear()
       await mgr.createAgent(
@@ -172,7 +172,14 @@ describe('AgentManager', () => {
         twoPhaseRunbook,
         repoPath
       )
-      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-error-handling-recovery')
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-error-handling-recovery', undefined)
+    })
+
+    it('passes worktreeBasePath to createWorktree when provided', async () => {
+      const mgr = new AgentManager()
+      await mgr.createAgent(testCard, twoPhaseRunbook, repoPath, 'D:/worktrees')
+
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-agent-manager', 'D:/worktrees')
     })
 
     it('handles card names without a number prefix', async () => {
@@ -182,7 +189,7 @@ describe('AgentManager', () => {
         twoPhaseRunbook,
         repoPath
       )
-      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-agent-manager')
+      expect(mockCreateWorktree).toHaveBeenCalledWith(repoPath, 'feat-agent-manager', undefined)
     })
 
     it('does not register agent if worktree creation fails', async () => {
