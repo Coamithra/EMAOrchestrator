@@ -12,6 +12,7 @@ import type {
 } from './cli-driver'
 import type { WorktreeInfo } from './worktree'
 import type { AgentSnapshot } from './agent-manager'
+import type { PendingHumanInteraction } from './agent-persistence'
 import type { ConcurrencyStatus } from './orchestration-loop'
 import type { TrelloCard, TrelloList } from './trello'
 import type { AgentStateSnapshot, AgentStepProgress } from './agent-state'
@@ -117,6 +118,10 @@ export type AgentEvent =
   | { type: 'agent:error'; data: { agentId: string; message: string } }
   | { type: 'agent:done'; data: { agentId: string } }
   | { type: 'agent:destroyed'; data: { agentId: string } }
+  | {
+      type: 'agent:interaction-changed'
+      data: { agentId: string; interaction: PendingHumanInteraction | null }
+    }
 
 /** Payload shape for the agent:event channel. */
 export interface AgentEventPayload {

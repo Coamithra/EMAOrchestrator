@@ -282,6 +282,26 @@ describe('getOrphanedWorktrees', () => {
     expect(orphans[0].branch).toBe('feat/orphan-1')
   })
 
+  it('matches known paths with backslashes against git forward-slash paths', async () => {
+    const porcelain = [
+      'worktree C:/Proj/main',
+      'HEAD abc1234',
+      'branch refs/heads/main',
+      '',
+      'worktree C:/Proj/.trees/feat-branch',
+      'HEAD def5678',
+      'branch refs/heads/feat-branch',
+      ''
+    ].join('\n')
+
+    mockExecFile.mockResolvedValueOnce({ stdout: porcelain, stderr: '' })
+
+    // Node path.join on Windows produces backslashes
+    const known = new Set(['C:\\Proj\\.trees\\feat-branch'])
+    const orphans = await getOrphanedWorktrees('C:/Proj/main', known)
+    expect(orphans).toHaveLength(0)
+  })
+
   it('returns empty array when only main exists', async () => {
     const porcelain = ['worktree C:/Proj/main', 'HEAD abc1234', 'branch refs/heads/main', ''].join(
       '\n'

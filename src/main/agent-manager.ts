@@ -204,6 +204,7 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     if (!entry) throw new Error(`Unknown agent: ${agentId}`)
     entry.pendingHumanInteraction = interaction
     this.persistAgent(entry)
+    this.emit('agent:interaction-changed', agentId, interaction)
   }
 
   /** Number of active agents. */

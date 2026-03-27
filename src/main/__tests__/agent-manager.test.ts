@@ -586,6 +586,39 @@ describe('AgentManager', () => {
       expect(mgr.getAgent(id)!.pendingHumanInteraction).toBeNull()
     })
 
+    it('emits agent:interaction-changed when setting interaction', async () => {
+      const mgr = new AgentManager()
+      const id = await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
+      const handler = vi.fn()
+      mgr.on('agent:interaction-changed', handler)
+
+      const interaction = {
+        type: 'permission' as const,
+        detail: 'Write to file.ts',
+        occurredAt: '2026-03-25T10:00:00.000Z'
+      }
+      mgr.setPendingHumanInteraction(id, interaction)
+
+      expect(handler).toHaveBeenCalledWith(id, interaction)
+    })
+
+    it('emits agent:interaction-changed when clearing interaction', async () => {
+      const mgr = new AgentManager()
+      const id = await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
+      const handler = vi.fn()
+
+      mgr.setPendingHumanInteraction(id, {
+        type: 'permission',
+        detail: 'Write to file.ts',
+        occurredAt: '2026-03-25T10:00:00.000Z'
+      })
+
+      mgr.on('agent:interaction-changed', handler)
+      mgr.setPendingHumanInteraction(id, null)
+
+      expect(handler).toHaveBeenCalledWith(id, null)
+    })
+
     it('throws for unknown agent', () => {
       const mgr = new AgentManager()
       expect(() => mgr.setPendingHumanInteraction('nope', null)).toThrow('Unknown agent')

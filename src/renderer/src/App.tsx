@@ -121,6 +121,18 @@ function App(): React.JSX.Element {
           break
         }
 
+        case 'agent:interaction-changed': {
+          const { agentId: interactionAgentId, interaction } = event.data
+          setAgents((prev) =>
+            prev.map((a) =>
+              a.id === interactionAgentId
+                ? { ...a, pendingHumanInteraction: interaction }
+                : a
+            )
+          )
+          break
+        }
+
         // step-advanced, phase-completed, error, and done are already covered
         // by the state-changed event which carries the full snapshot.
         case 'agent:step-advanced':

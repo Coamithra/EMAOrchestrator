@@ -89,6 +89,11 @@ function wireAgentEventForwarding(): void {
   agentManager.on('agent:destroyed', (agentId) => {
     broadcastAgentEvent({ event: { type: 'agent:destroyed', data: { agentId } } })
   })
+  agentManager.on('agent:interaction-changed', (agentId, interaction) => {
+    broadcastAgentEvent({
+      event: { type: 'agent:interaction-changed', data: { agentId, interaction } }
+    })
+  })
 }
 
 /**

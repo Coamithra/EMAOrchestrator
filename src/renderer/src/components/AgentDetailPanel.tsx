@@ -63,25 +63,29 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
     if (!agentId) return
 
     // Seed dialog from snapshot if the agent is already waiting for input.
-    // The snapshot has type + detail but not the full request object, so we
-    // construct a minimal one. The real request will replace it if the event
-    // arrives while we're subscribed.
+    // Uses the full request object when available (stored since the interaction
+    // was created). Falls back to a minimal reconstruction from the detail string
+    // for backwards compatibility with older persisted data.
     if (agent?.pendingHumanInteraction) {
-      const { type, detail } = agent.pendingHumanInteraction
+      const { type, detail, permissionRequest, questionRequest } = agent.pendingHumanInteraction
       if (type === 'permission') {
-        setPendingPermission({
-          requestId: `restored-${agentId}`,
-          toolName: detail.split(':')[0] || 'Unknown tool',
-          toolInput: {},
-          toolUseId: '',
-          description: detail
-        })
+        setPendingPermission(
+          permissionRequest ?? {
+            requestId: `restored-${agentId}`,
+            toolName: detail.split(':')[0] || 'Unknown tool',
+            toolInput: {},
+            toolUseId: '',
+            description: detail
+          }
+        )
       } else if (type === 'question') {
-        setPendingQuestion({
-          requestId: `restored-${agentId}`,
-          question: detail,
-          toolUseId: ''
-        })
+        setPendingQuestion(
+          questionRequest ?? {
+            requestId: `restored-${agentId}`,
+            question: detail,
+            toolUseId: ''
+          }
+        )
       }
     }
 
@@ -185,14 +189,14 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
         </div>
         <div className="agent-detail-panel__terminal">
           <TerminalView agentId={agent.id} />
-          {pendingPermission && (
+          {isRunning && pendingPermission && (
             <PermissionDialog
               key={pendingPermission.requestId}
               request={pendingPermission}
               onRespond={handlePermissionResponse}
             />
           )}
-          {pendingQuestion && (
+          {isRunning && pendingQuestion && (
             <QuestionDialog
               key={pendingQuestion.requestId}
               request={pendingQuestion}

@@ -2,6 +2,7 @@ import type { AgentStateSnapshot, StateMachineRestoreData } from './agent-state'
 import type { CardInfo } from './agent-manager'
 import type { WorktreeInfo } from './worktree'
 import type { Runbook } from './runbook'
+import type { PermissionRequest, UserQuestionRequest } from './cli-driver'
 
 /** Record of a completed step, for history tracking. */
 export interface StepCompletionRecord {
@@ -18,6 +19,8 @@ export interface PendingHumanInteraction {
   type: 'permission' | 'question'
   detail: string
   occurredAt: string // ISO 8601
+  permissionRequest?: PermissionRequest
+  questionRequest?: UserQuestionRequest
 }
 
 /** The full persisted state for a single agent. */

@@ -535,7 +535,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         this.agentManager.setPendingHumanInteraction(agentId, {
           type: 'permission',
           detail: `${request.toolName}: ${request.title ?? request.description ?? ''}`,
-          occurredAt: new Date().toISOString()
+          occurredAt: new Date().toISOString(),
+          permissionRequest: request
         })
       })
 
@@ -554,7 +555,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         this.agentManager.setPendingHumanInteraction(agentId, {
           type: 'question',
           detail: request.question,
-          occurredAt: new Date().toISOString()
+          occurredAt: new Date().toISOString(),
+          questionRequest: request
         })
       })
 
