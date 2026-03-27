@@ -36,12 +36,18 @@ function Settings({
 
   function update<K extends keyof AppConfig>(key: K, value: AppConfig[K]): void {
     setConfig((prev) => ({ ...prev, [key]: value }))
+    // Clear fetched lists when Trello credentials or board change — prevents saving
+    // stale list IDs that belong to a different board
+    if (key === 'trelloBoardId' || key === 'trelloApiKey' || key === 'trelloApiToken') {
+      setBoardLists([])
+      setListError(null)
+    }
   }
 
   function assignRole(listId: string, role: TrelloListRole): void {
     setConfig((prev) => {
       const ids = { ...prev.trelloListIds }
-      // Clear this role from any other list
+      // Assign this role to the selected list (overwrites previous assignment)
       ids[role] = listId
       // If this list was already assigned a different role, clear that
       for (const r of ALL_ROLES) {
@@ -83,6 +89,19 @@ function Settings({
         setListError('No lists found — check board ID and credentials')
       }
       setBoardLists(lists)
+      // Prune any saved list IDs that no longer exist on the board
+      const validIds = new Set(lists.map((l) => l.id))
+      setConfig((prev) => {
+        const ids = { ...prev.trelloListIds }
+        let changed = false
+        for (const r of ALL_ROLES) {
+          if (ids[r] && !validIds.has(ids[r])) {
+            ids[r] = ''
+            changed = true
+          }
+        }
+        return changed ? { ...prev, trelloListIds: ids } : prev
+      })
     } catch {
       setListError('Failed to fetch lists')
     } finally {
