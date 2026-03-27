@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # EMAOrchestrator
 
 "Everybody's Making An" Orchestrator — a runbook enforcer that drives Claude Code sessions step-by-step through a CONTRIBUTING.md workflow, so the human doesn't have to babysit adherence.
@@ -214,10 +218,12 @@ Modal dialog for launching a new agent from the UI. Triggered by the "+ New Agen
 
 - `npm run dev` — Launch Electron app with hot reload
 - `npm run build` — TypeScript check + production build
-- `npm run typecheck` — TypeScript type checking only
+- `npm run typecheck` — TypeScript type checking only (runs both `typecheck:node` and `typecheck:web`)
 - `npm run lint` — Run ESLint
 - `npm run format` — Run Prettier
-- `npx vitest run` — Run unit tests
+- `npx vitest run` — Run all unit tests
+- `npx vitest run src/main/__tests__/foo.test.ts` — Run a single test file
+- `npx vitest run -t "test name"` — Run tests matching a name pattern
 
 ## Project Structure
 
@@ -231,6 +237,18 @@ Modal dialog for launching a new agent from the UI. Triggered by the "+ New Agen
 - `spikes/` — Proof-of-concept scripts from research spikes
 
 ## Conventions
+
+### TypeScript
+
+Two tsconfig files: `tsconfig.node.json` (main + preload + shared) and `tsconfig.web.json` (renderer + shared). The root `tsconfig.json` is a project-references wrapper only — it compiles nothing. When adding new source paths, update the correct tsconfig.
+
+### Code Style
+
+Prettier: single quotes, no semicolons, 100-char line width, no trailing commas. EditorConfig: 2-space indent, LF line endings.
+
+### Tests
+
+Tests live in `src/main/__tests__/` using Vitest (no config file — uses defaults). Test files are named `<module>.test.ts`. No vitest config — runs with default settings.
 
 ### Import Aliases
 
