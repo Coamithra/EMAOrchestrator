@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { AppConfig, ValidationResult, RunbookParserType } from '@shared/config'
+import type { AppConfig, ValidationResult, RunbookParserType, TrelloListRole } from '@shared/config'
 import { DEFAULT_CONFIG, extractBoardId } from '@shared/config'
+import type { TrelloList } from '@shared/trello'
 import SettingsField from './SettingsField'
 import './Settings.css'
 
@@ -10,6 +11,14 @@ interface SettingsProps {
   onSaved: (config: AppConfig) => void
   onCancel?: () => void
 }
+
+const ROLE_LABELS: Record<TrelloListRole, string> = {
+  backlog: 'Backlog',
+  inProgress: 'In Progress',
+  done: 'Done'
+}
+
+const ALL_ROLES: TrelloListRole[] = ['backlog', 'inProgress', 'done']
 
 function Settings({
   initialConfig,
@@ -21,19 +30,69 @@ function Settings({
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [saving, setSaving] = useState(false)
   const [showToken, setShowToken] = useState(false)
+  const [boardLists, setBoardLists] = useState<TrelloList[]>([])
+  const [fetchingLists, setFetchingLists] = useState(false)
+  const [listError, setListError] = useState<string | null>(null)
 
   function update<K extends keyof AppConfig>(key: K, value: AppConfig[K]): void {
     setConfig((prev) => ({ ...prev, [key]: value }))
   }
 
-  function updateListName(key: keyof AppConfig['trelloListNames'], value: string): void {
-    setConfig((prev) => ({
-      ...prev,
-      trelloListNames: { ...prev.trelloListNames, [key]: value }
-    }))
+  function assignRole(listId: string, role: TrelloListRole): void {
+    setConfig((prev) => {
+      const ids = { ...prev.trelloListIds }
+      // Clear this role from any other list
+      ids[role] = listId
+      // If this list was already assigned a different role, clear that
+      for (const r of ALL_ROLES) {
+        if (r !== role && ids[r] === listId) {
+          ids[r] = ''
+        }
+      }
+      return { ...prev, trelloListIds: ids }
+    })
   }
 
-  async function handleBrowseDirectory(field: 'targetRepoPath' | 'worktreeBasePath'): Promise<void> {
+  function clearRole(listId: string): void {
+    setConfig((prev) => {
+      const ids = { ...prev.trelloListIds }
+      for (const r of ALL_ROLES) {
+        if (ids[r] === listId) ids[r] = ''
+      }
+      return { ...prev, trelloListIds: ids }
+    })
+  }
+
+  function getRoleForList(listId: string): TrelloListRole | null {
+    for (const r of ALL_ROLES) {
+      if (config.trelloListIds[r] === listId) return r
+    }
+    return null
+  }
+
+  async function handleFetchLists(): Promise<void> {
+    setFetchingLists(true)
+    setListError(null)
+    try {
+      const lists = (await window.api.getTrelloListsForBoard(
+        config.trelloBoardId,
+        config.trelloApiKey,
+        config.trelloApiToken
+      )) as TrelloList[]
+      if (lists.length === 0) {
+        setListError('No lists found — check board ID and credentials')
+      }
+      setBoardLists(lists)
+    } catch {
+      setListError('Failed to fetch lists')
+    } finally {
+      setFetchingLists(false)
+    }
+  }
+
+  async function handleBrowseDirectory(
+    field: 'targetRepoPath' | 'worktreeBasePath'
+  ): Promise<void> {
     const path = await window.api.openDirectory()
     if (path) update(field, path)
   }
@@ -72,6 +131,8 @@ function Settings({
       setSaving(false)
     }
   }
+
+  const canFetchLists = !!(config.trelloBoardId && config.trelloApiKey && config.trelloApiToken)
 
   return (
     <div className="settings">
@@ -173,28 +234,69 @@ function Settings({
           </SettingsField>
 
           <div className="settings__subgroup">
-            <span className="settings__subgroup-label">List Names</span>
-            <SettingsField label="To Do">
-              <input
-                type="text"
-                value={config.trelloListNames.todo}
-                onChange={(e) => updateListName('todo', e.target.value)}
-              />
-            </SettingsField>
-            <SettingsField label="In Progress">
-              <input
-                type="text"
-                value={config.trelloListNames.inProgress}
-                onChange={(e) => updateListName('inProgress', e.target.value)}
-              />
-            </SettingsField>
-            <SettingsField label="Done">
-              <input
-                type="text"
-                value={config.trelloListNames.done}
-                onChange={(e) => updateListName('done', e.target.value)}
-              />
-            </SettingsField>
+            <div className="settings__subgroup-header">
+              <span className="settings__subgroup-label">Board Lists</span>
+              <button
+                type="button"
+                className="settings__btn settings__btn--small"
+                onClick={handleFetchLists}
+                disabled={!canFetchLists || fetchingLists}
+              >
+                {fetchingLists ? 'Fetching...' : 'Fetch Lists'}
+              </button>
+            </div>
+
+            {listError && <div className="settings__list-error">{listError}</div>}
+
+            {boardLists.length > 0 && (
+              <table className="settings__list-table">
+                <thead>
+                  <tr>
+                    <th>List</th>
+                    {ALL_ROLES.map((r) => (
+                      <th key={r}>{ROLE_LABELS[r]}</th>
+                    ))}
+                    <th>None</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {boardLists.map((list) => {
+                    const currentRole = getRoleForList(list.id)
+                    return (
+                      <tr key={list.id}>
+                        <td className="settings__list-name">{list.name}</td>
+                        {ALL_ROLES.map((r) => (
+                          <td key={r} className="settings__list-radio">
+                            <input
+                              type="radio"
+                              name={`list-role-${list.id}`}
+                              checked={currentRole === r}
+                              onChange={() => assignRole(list.id, r)}
+                            />
+                          </td>
+                        ))}
+                        <td className="settings__list-radio">
+                          <input
+                            type="radio"
+                            name={`list-role-${list.id}`}
+                            checked={currentRole === null}
+                            onChange={() => clearRole(list.id)}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            {boardLists.length === 0 && !listError && (
+              <div className="settings__list-hint">
+                {canFetchLists
+                  ? 'Click "Fetch Lists" to load board lists'
+                  : 'Enter board ID, API key, and token first'}
+              </div>
+            )}
           </div>
         </section>
 

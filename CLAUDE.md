@@ -50,13 +50,13 @@ Wraps the Agent SDK's `query()` into an EventEmitter-based service. One `CliDriv
 Stateless exported functions for Trello REST API operations. Uses native `fetch()` with 10-second timeouts. Read functions degrade gracefully (return empty arrays on failure, never throw). Mutation functions (`moveCard`, `addComment`) retry up to 3 times with exponential backoff (1s, 2s delays) on network errors and 5xx server errors; 4xx client errors are not retried.
 
 - **`getListsForBoard(boardId, creds)`** — Fetches all open lists for a board.
-- **`getListIdByName(boardId, listName, creds)`** — Resolves a list name to its ID (case-insensitive).
+- **`getListIdByName(boardId, listName, creds)`** — Resolves a list name to its ID (case-insensitive). Retained for potential external use but no longer called by the orchestrator (list IDs are stored directly in config).
 - **`getCardsFromList(listId, creds)`** — Fetches all open cards from a list.
 - **`moveCard(cardId, targetListId, creds)`** — Moves a card to a different list (PUT).
 - **`addComment(cardId, text, creds)`** — Posts a comment on a card (POST).
 - **Shared types:** `src/shared/trello.ts` defines `TrelloCredentials`, `TrelloList`, `TrelloCard`.
-- **Orchestration integration:** The orchestration loop calls `moveCard` (to In Progress on start, to Done on completion) and `addComment` (summary on completion) as fire-and-forget operations that never block agent work.
-- **IPC channels:** `trello:getLists`, `trello:getBacklogCards` — for the renderer to fetch board data.
+- **Orchestration integration:** The orchestration loop uses `config.trelloListIds` directly (no runtime name→ID resolution). Calls `moveCard` (to In Progress on start, to Done on completion) and `addComment` (summary on completion) as fire-and-forget operations that never block agent work.
+- **IPC channels:** `trello:getLists`, `trello:getListsForBoard`, `trello:getBacklogCards` — for the renderer to fetch board data. `getListsForBoard` accepts explicit credentials (used by Settings to fetch lists before saving).
 
 ### Worktree Manager (`src/main/worktree-manager.ts`)
 
@@ -283,6 +283,7 @@ App config stored at `app.getPath('userData')/config.json`. Config service in `s
 
 - **`worktreeBasePath`** (string, optional) — Custom base directory for agent worktrees. When empty (default), worktrees are created as siblings to the repo directory.
 - **`trelloBoardId`** — The Settings UI accepts either a raw board ID or a full Trello URL (`https://trello.com/b/<id>/...`). The `extractBoardId()` utility in `src/shared/config.ts` extracts the ID from URLs on input.
+- **`trelloListIds`** — `{ backlog, inProgress, done }` storing Trello list **IDs** directly. Assigned via the Settings UI: user clicks "Fetch Lists" to load board lists, then assigns roles (Backlog / In Progress / Done) via radio buttons. Replaces the old `trelloListNames` text fields — no more runtime name→ID resolution.
 - **`runbookParser`** (`'regex' | 'smart'`, default `'regex'`) — Which parser to use for CONTRIBUTING.md. `regex` is the original line-scanner (fast, offline, free). `smart` sends the markdown to Claude via the Agent SDK for AI-powered parsing — handles varied markdown structures and filters out non-workflow sections (reference tables, appendices). Configurable in Settings under the Repository section.
 
 ## Worktree Layout

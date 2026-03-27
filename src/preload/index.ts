@@ -75,6 +75,12 @@ const api = {
 
   // Trello
   getTrelloLists: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.TRELLO_GET_LISTS),
+  getTrelloListsForBoard: (
+    boardId: string,
+    apiKey: string,
+    apiToken: string
+  ): Promise<unknown> =>
+    ipcRenderer.invoke(IpcChannels.TRELLO_GET_LISTS_FOR_BOARD, boardId, apiKey, apiToken),
   getTrelloBacklogCards: (): Promise<unknown> =>
     ipcRenderer.invoke(IpcChannels.TRELLO_GET_BACKLOG_CARDS),
 

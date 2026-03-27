@@ -67,6 +67,7 @@ export const IpcChannels = {
 
   // Trello
   TRELLO_GET_LISTS: 'trello:getLists',
+  TRELLO_GET_LISTS_FOR_BOARD: 'trello:getListsForBoard',
   TRELLO_GET_BACKLOG_CARDS: 'trello:getBacklogCards',
 
   // Logging
@@ -164,6 +165,7 @@ export interface AgentCreateAPI {
 /** Trello API exposed to the renderer. */
 export interface TrelloAPI {
   getTrelloLists(): Promise<TrelloList[]>
+  getTrelloListsForBoard(boardId: string, apiKey: string, apiToken: string): Promise<TrelloList[]>
   getTrelloBacklogCards(): Promise<TrelloCard[]>
 }
 

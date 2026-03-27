@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron'
 import { CliDriver } from './cli-driver'
 import { generateStepPrompt } from './prompt-generator'
 import { TypedEventEmitter } from './typed-emitter'
-import { moveCard, addComment, getListIdByName } from './trello-service'
+import { moveCard, addComment } from './trello-service'
 import { loadConfig } from './config-service'
 import { appendLogEntry } from './logging-service'
 import { createTrackerDoc, checkOffStep, removeTrackerDoc } from './tracker-doc-service'
@@ -648,11 +648,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     const { cardId, creds, config } = await this.getTrelloContext(agentId)
     if (!cardId || !creds || !config) return
 
-    const listId = await getListIdByName(
-      config.trelloBoardId,
-      config.trelloListNames.inProgress,
-      creds
-    )
+    const listId = config.trelloListIds.inProgress
     if (listId) {
       await moveCard(cardId, listId, creds)
     }
@@ -663,7 +659,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     const { cardId, creds, config } = await this.getTrelloContext(agentId)
     if (!cardId || !creds || !config) return
 
-    const listId = await getListIdByName(config.trelloBoardId, config.trelloListNames.done, creds)
+    const listId = config.trelloListIds.done
     if (listId) {
       await moveCard(cardId, listId, creds)
     }

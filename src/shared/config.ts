@@ -1,5 +1,8 @@
 export type RunbookParserType = 'regex' | 'smart'
 
+/** Role that a Trello list can be assigned in the orchestrator. */
+export type TrelloListRole = 'backlog' | 'inProgress' | 'done'
+
 export interface AppConfig {
   targetRepoPath: string
   contributingMdPath: string
@@ -8,8 +11,8 @@ export interface AppConfig {
   trelloApiKey: string
   trelloApiToken: string
   trelloBoardId: string
-  trelloListNames: {
-    todo: string
+  trelloListIds: {
+    backlog: string
     inProgress: string
     done: string
   }
@@ -26,10 +29,10 @@ export const DEFAULT_CONFIG: AppConfig = {
   trelloApiKey: '',
   trelloApiToken: '',
   trelloBoardId: '',
-  trelloListNames: {
-    todo: 'Backlog',
-    inProgress: 'In Progress',
-    done: 'Done'
+  trelloListIds: {
+    backlog: '',
+    inProgress: '',
+    done: ''
   },
   claudeCliPath: '',
   maxConcurrentAgents: 3,

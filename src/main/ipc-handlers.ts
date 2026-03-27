@@ -11,7 +11,7 @@ import { removePersistedAgent } from './agent-persistence-service'
 import { parseRunbookContent } from './runbook-parser'
 import { parseRunbookSmart } from './smart-runbook-parser'
 import { getCachedRunbook, cacheRunbook } from './runbook-cache'
-import { getListsForBoard, getCardsFromList, getListIdByName } from './trello-service'
+import { getListsForBoard, getCardsFromList } from './trello-service'
 import { readAgentLog } from './logging-service'
 import type { AgentManager } from './agent-manager'
 import type { CardInfo } from '../shared/agent-manager'
@@ -282,13 +282,23 @@ export function registerIpcHandlers(
     })
   })
 
+  ipcMain.handle(
+    IpcChannels.TRELLO_GET_LISTS_FOR_BOARD,
+    async (_event, boardId: string, apiKey: string, apiToken: string) => {
+      if (!boardId || !apiKey || !apiToken) return []
+      return await getListsForBoard(boardId, { apiKey, apiToken })
+    }
+  )
+
   ipcMain.handle(IpcChannels.TRELLO_GET_BACKLOG_CARDS, async () => {
     const config = await loadConfig()
     if (!config?.trelloApiKey || !config?.trelloApiToken || !config?.trelloBoardId) return []
-    const creds = { apiKey: config.trelloApiKey, apiToken: config.trelloApiToken }
-    const listId = await getListIdByName(config.trelloBoardId, config.trelloListNames.todo, creds)
-    if (!listId) return []
-    return await getCardsFromList(listId, creds)
+    const backlogListId = config.trelloListIds.backlog
+    if (!backlogListId) return []
+    return await getCardsFromList(backlogListId, {
+      apiKey: config.trelloApiKey,
+      apiToken: config.trelloApiToken
+    })
   })
 
   // ---------------------------------------------------------------------------

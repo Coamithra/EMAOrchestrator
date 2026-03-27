@@ -155,17 +155,70 @@
   background: var(--ev-c-gray-2);
 }
 
-/* Subgroup (Trello list names) */
+/* Subgroup (Board Lists) */
 .settings__subgroup {
   padding-left: 16px;
   margin-top: 12px;
 }
 
+.settings__subgroup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
 .settings__subgroup-label {
-  display: block;
   font-size: 13px;
   color: var(--ev-c-text-2);
+}
+
+/* Board list assignment table */
+.settings__list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.settings__list-table th {
+  font-weight: 600;
+  color: var(--ev-c-text-2);
+  padding: 6px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.settings__list-table th:first-child {
+  text-align: left;
+}
+
+.settings__list-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.settings__list-name {
+  color: var(--ev-c-text-1);
+}
+
+.settings__list-radio {
+  text-align: center;
+}
+
+.settings__list-radio input[type='radio'] {
+  cursor: pointer;
+}
+
+.settings__list-error {
+  font-size: 12px;
+  color: #f44336;
   margin-bottom: 8px;
+}
+
+.settings__list-hint {
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+  font-style: italic;
 }
 
 /* Action buttons */
@@ -187,6 +240,17 @@
 .settings__btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.settings__btn--small {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--ev-c-gray-3);
+  color: var(--ev-c-text-1);
+}
+
+.settings__btn--small:hover:not(:disabled) {
+  background: var(--ev-c-gray-2);
 }
 
 .settings__btn--primary {

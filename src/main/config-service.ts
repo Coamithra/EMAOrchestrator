@@ -26,11 +26,14 @@ export async function loadConfig(): Promise<AppConfig | null> {
     const raw = await readFile(configPath(), 'utf-8')
     const parsed = JSON.parse(raw)
     // Deep-merge nested objects so partial saved configs don't lose default sub-keys
-    return {
+    const config = {
       ...DEFAULT_CONFIG,
       ...parsed,
-      trelloListNames: { ...DEFAULT_CONFIG.trelloListNames, ...parsed.trelloListNames }
+      trelloListIds: { ...DEFAULT_CONFIG.trelloListIds, ...parsed.trelloListIds }
     }
+    // Drop legacy trelloListNames if present
+    delete (config as Record<string, unknown>).trelloListNames
+    return config
   } catch {
     return null
   }
