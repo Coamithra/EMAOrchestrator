@@ -43,10 +43,16 @@ export async function appendLogEntry(entry: LogEntry): Promise<void> {
 export async function readAgentLog(agentId: string): Promise<LogEntry[]> {
   try {
     const raw = await readFile(getLogPath(agentId), 'utf-8')
-    return raw
-      .split('\n')
-      .filter((line) => line.trim())
-      .map((line) => JSON.parse(line) as LogEntry)
+    const entries: LogEntry[] = []
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue
+      try {
+        entries.push(JSON.parse(line) as LogEntry)
+      } catch {
+        // Skip corrupt lines (e.g., torn write from crash)
+      }
+    }
+    return entries
   } catch {
     return []
   }

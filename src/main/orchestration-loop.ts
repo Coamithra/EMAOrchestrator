@@ -198,7 +198,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       lastActivityAt: Date.now(),
       stuckNotified: false,
       stuckCheckInterval: null,
-      stepStartedAt: 0
+      stepStartedAt: Date.now()
     }
     this.running.set(agentId, entry)
 
@@ -233,7 +233,6 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     }
   }
 
-  /** Distributive Omit that preserves union members. */
   /** Fire-and-forget log helper. Looks up agent card name automatically. */
   private log(
     agentId: string,
@@ -366,6 +365,15 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       const summary = entry.lastAssistantText.slice(-500) || 'Step completed.'
       this.agentManager.setStepSummary(agentId, completedPhaseIndex, completedStepIndex, summary)
 
+      if (entry.lastAssistantText) {
+        this.log(agentId, {
+          event: 'response_received',
+          phaseIndex: completedPhaseIndex,
+          stepIndex: completedStepIndex,
+          text: entry.lastAssistantText.slice(-2000)
+        })
+      }
+
       this.log(agentId, {
         event: 'step_completed',
         phaseIndex: completedPhaseIndex,
@@ -481,14 +489,6 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       driver.on('assistant:message', (content: AssistantContent) => {
         if (content.text) {
           entry.lastAssistantText = content.text
-          const sm = this.agentManager.getStateMachine(agentId)
-          const snap = sm?.getSnapshot()
-          this.log(agentId, {
-            event: 'response_received',
-            phaseIndex: snap?.phaseIndex ?? -1,
-            stepIndex: snap?.stepIndex ?? -1,
-            text: content.text.slice(-2000)
-          })
         }
         resetActivity()
       })

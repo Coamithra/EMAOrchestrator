@@ -119,5 +119,15 @@ describe('logging-service', () => {
       const result = await readAgentLog('agent-1')
       expect(result).toHaveLength(1)
     })
+
+    it('skips corrupt lines without discarding valid entries', async () => {
+      const valid =
+        '{"event":"agent_started","timestamp":"","agentId":"a","cardName":"c","branch":"b","worktreePath":"w"}'
+      mockReadFile.mockResolvedValue(`${valid}\nNOT_JSON\n${valid}\n`)
+      const result = await readAgentLog('agent-1')
+      expect(result).toHaveLength(2)
+      expect(result[0].event).toBe('agent_started')
+      expect(result[1].event).toBe('agent_started')
+    })
   })
 })
