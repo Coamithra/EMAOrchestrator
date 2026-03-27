@@ -225,8 +225,17 @@ Modal dialog for launching a new agent from the UI. Triggered by the "+ New Agen
 
 - **Card selection:** Fetches backlog cards via `getTrelloBacklogCards()` and displays them in a selectable list.
 - **Branch preview:** Shows auto-generated branch name (mirrors `AgentManager.branchNameFromCard` logic).
-- **Creation flow:** Calls `createAgent(card)` via IPC → main process parses runbook, creates worktree + state machine. Then auto-starts orchestration via `startOrchestration(agentId)`.
-- **IPC channel:** `agent:create` — handler in `ipc-handlers.ts` loads config, parses runbook, delegates to `agentManager.createAgent()`.
+- **Creation flow:** Calls `createAgent(card)` via IPC → main process uses pre-parsed runbook (or parses on-demand as fallback), creates worktree + state machine. Then auto-starts orchestration via `startOrchestration(agentId)`.
+- **IPC channel:** `agent:create` — handler in `ipc-handlers.ts` loads config, uses cached runbook, delegates to `agentManager.createAgent()`.
+
+### Runbook View (`src/renderer/src/components/RunbookView.tsx`)
+
+Dedicated screen for viewing the parsed runbook. Accessible via the "Runbook" button in the TopBar.
+
+- **Eager parsing:** The runbook is parsed on app startup (config load) and on config save, cached in memory (`activeRunbook` in `ipc-handlers.ts`). Agent creation uses this pre-parsed runbook instantly.
+- **Phase/step display:** Shows all phases as collapsible sections with numbered steps, titles, and descriptions.
+- **Refresh button:** Re-parses CONTRIBUTING.md on demand via `runbook:refresh` IPC channel.
+- **IPC channels:** `runbook:get` (returns cached runbook), `runbook:refresh` (re-parses and returns).
 
 ## Development Workflow
 
@@ -283,7 +292,7 @@ App config stored at `app.getPath('userData')/config.json`. Config service in `s
 
 - **`worktreeBasePath`** (string, optional) — Custom base directory for agent worktrees. When empty (default), worktrees are created as siblings to the repo directory.
 - **`trelloBoardId`** — The Settings UI accepts either a raw board ID or a full Trello URL (`https://trello.com/b/<id>/...`). The `extractBoardId()` utility in `src/shared/config.ts` extracts the ID from URLs on input.
-- **`trelloListIds`** — `{ backlog, inProgress, done }` storing Trello list **IDs** directly. Assigned via the Settings UI: user clicks "Fetch Lists" to load board lists, then assigns roles (Backlog / In Progress / Done) via radio buttons. Replaces the old `trelloListNames` text fields — no more runtime name→ID resolution.
+- **`trelloListIds`** — `{ backlog: string[], inProgress: string, done: string }` storing Trello list **IDs** directly. `backlog` is an array (multiple lists can serve as card sources). Assigned via the Settings UI: lists are auto-fetched on open, roles assigned via radio buttons. Replaces the old `trelloListNames` text fields — no more runtime name→ID resolution.
 - **`runbookParser`** (`'regex' | 'smart'`, default `'regex'`) — Which parser to use for CONTRIBUTING.md. `regex` is the original line-scanner (fast, offline, free). `smart` sends the markdown to Claude via the Agent SDK for AI-powered parsing — handles varied markdown structures and filters out non-workflow sections (reference tables, appendices). Configurable in Settings under the Repository section.
 
 ## Worktree Layout
