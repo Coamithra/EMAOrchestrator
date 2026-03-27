@@ -58,7 +58,7 @@ Stateless exported functions for Trello REST API operations. Uses native `fetch(
 
 Wraps `git worktree` commands into an async service. Stateless exported functions (same pattern as config-service). One worktree per agent session, created as siblings to the main repo directory.
 
-- **`createWorktree(repoPath, branch)`** — Creates worktree + new branch from main. Reuses branch if it already exists.
+- **`createWorktree(repoPath, branch, basePath?)`** — Creates worktree + new branch from main. Reuses branch if it already exists. Optional `basePath` overrides the default sibling-to-repo location.
 - **`listWorktrees(repoPath)`** — Parses `git worktree list --porcelain` into typed `WorktreeInfo[]`.
 - **`removeWorktree(repoPath, worktree)`** — Removes worktree by `WorktreeInfo`, prunes, deletes branch.
 - **`getOrphanedWorktrees(repoPath)`** — Returns all non-main worktrees (orphans on startup).
@@ -243,7 +243,10 @@ Named `namespace:action` (e.g., `config:load`, `cli:start`, `worktree:list`). Ch
 
 ### Configuration
 
-App config stored at `app.getPath('userData')/config.json`. Config service in `src/main/config-service.ts`. Schema defined in `src/shared/config.ts`.
+App config stored at `app.getPath('userData')/config.json`. Config service in `src/main/config-service.ts`. Schema defined in `src/shared/config.ts`. Notable fields:
+
+- **`worktreeBasePath`** (string, optional) — Custom base directory for agent worktrees. When empty (default), worktrees are created as siblings to the repo directory.
+- **`trelloBoardId`** — The Settings UI accepts either a raw board ID or a full Trello URL (`https://trello.com/b/<id>/...`). The `extractBoardId()` utility in `src/shared/config.ts` extracts the ID from URLs on input.
 
 ## Worktree Layout
 

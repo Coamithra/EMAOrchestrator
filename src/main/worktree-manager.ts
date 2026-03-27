@@ -56,14 +56,21 @@ export async function listWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
 /**
  * Create a new worktree with a new branch based on main.
  *
- * Worktree is created as a sibling to the repo directory:
+ * By default, the worktree is created as a sibling to the repo directory:
  *   repoPath = C:\Proj\main  →  worktree at C:\Proj\<branch>
+ *
+ * If `basePath` is provided, the worktree is created under that directory instead:
+ *   basePath = D:\worktrees  →  worktree at D:\worktrees\<branch>
  *
  * If the branch already exists (but has no worktree), it reuses the branch
  * instead of creating a new one.
  */
-export async function createWorktree(repoPath: string, branch: string): Promise<WorktreeInfo> {
-  const parentDir = dirname(repoPath)
+export async function createWorktree(
+  repoPath: string,
+  branch: string,
+  basePath?: string
+): Promise<WorktreeInfo> {
+  const parentDir = basePath || dirname(repoPath)
   const worktreePath = resolve(join(parentDir, branch))
 
   // Check if worktree directory already exists

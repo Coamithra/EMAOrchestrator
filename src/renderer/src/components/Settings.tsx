@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AppConfig, ValidationResult } from '@shared/config'
-import { DEFAULT_CONFIG } from '@shared/config'
+import { DEFAULT_CONFIG, extractBoardId } from '@shared/config'
 import SettingsField from './SettingsField'
 import './Settings.css'
 
@@ -33,7 +33,7 @@ function Settings({
     }))
   }
 
-  async function handleBrowseDirectory(field: 'targetRepoPath'): Promise<void> {
+  async function handleBrowseDirectory(field: 'targetRepoPath' | 'worktreeBasePath'): Promise<void> {
     const path = await window.api.openDirectory()
     if (path) update(field, path)
   }
@@ -110,6 +110,18 @@ function Settings({
               placeholder="CONTRIBUTING.md"
             />
           </SettingsField>
+
+          <SettingsField
+            label="Worktree Base Path"
+            onBrowse={() => handleBrowseDirectory('worktreeBasePath')}
+          >
+            <input
+              type="text"
+              value={config.worktreeBasePath}
+              onChange={(e) => update('worktreeBasePath', e.target.value)}
+              placeholder="Leave empty to use repo parent directory"
+            />
+          </SettingsField>
         </section>
 
         <section className="settings__section">
@@ -145,8 +157,8 @@ function Settings({
             <input
               type="text"
               value={config.trelloBoardId}
-              onChange={(e) => update('trelloBoardId', e.target.value)}
-              placeholder="Trello board ID"
+              onChange={(e) => update('trelloBoardId', extractBoardId(e.target.value))}
+              placeholder="Board ID or full Trello URL"
             />
           </SettingsField>
 

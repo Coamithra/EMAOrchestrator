@@ -184,7 +184,12 @@ export function registerIpcHandlers(
       throw new Error('App not configured — set target repo and CONTRIBUTING.md path first')
     }
     const runbook = await parseRunbookFile(config.contributingMdPath)
-    return await agentManager.createAgent(card, runbook, config.targetRepoPath)
+    return await agentManager.createAgent(
+      card,
+      runbook,
+      config.targetRepoPath,
+      config.worktreeBasePath || undefined
+    )
   })
 
   // ---------------------------------------------------------------------------

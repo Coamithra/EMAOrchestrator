@@ -44,9 +44,16 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
    * and registers the agent. Returns the agent ID. If the state machine
    * constructor throws (bad runbook), the worktree is cleaned up.
    */
-  async createAgent(card: CardInfo, runbook: Runbook, repoPath: string): Promise<string> {
+  async createAgent(
+    card: CardInfo,
+    runbook: Runbook,
+    repoPath: string,
+    worktreeBasePath?: string
+  ): Promise<string> {
     const branch = branchNameFromCard(card.name)
-    const worktree = await createWorktree(repoPath, branch)
+    const worktree = worktreeBasePath
+      ? await createWorktree(repoPath, branch, worktreeBasePath)
+      : await createWorktree(repoPath, branch)
 
     let stateMachine: AgentStateMachine
     try {
