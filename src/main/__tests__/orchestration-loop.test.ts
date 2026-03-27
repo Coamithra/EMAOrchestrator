@@ -52,10 +52,14 @@ vi.mock('../agent-persistence-service', () => ({
   removePersistedAgent: mockRemovePersistedAgent
 }))
 
+const mockCreateTrackerDoc = vi.hoisted(() => vi.fn())
+const mockCheckOffStep = vi.hoisted(() => vi.fn())
+const mockRemoveTrackerDoc = vi.hoisted(() => vi.fn())
+
 vi.mock('../tracker-doc-service', () => ({
-  createTrackerDoc: vi.fn().mockResolvedValue(undefined),
-  checkOffStep: vi.fn().mockResolvedValue(undefined),
-  removeTrackerDoc: vi.fn().mockResolvedValue(undefined)
+  createTrackerDoc: mockCreateTrackerDoc,
+  checkOffStep: mockCheckOffStep,
+  removeTrackerDoc: mockRemoveTrackerDoc
 }))
 
 import { AgentManager } from '../agent-manager'
@@ -149,6 +153,9 @@ function mockErrorSession(errorMessage: string): void {
 describe('OrchestrationLoop', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCreateTrackerDoc.mockResolvedValue(undefined)
+    mockCheckOffStep.mockResolvedValue(undefined)
+    mockRemoveTrackerDoc.mockResolvedValue(undefined)
   })
 
   describe('startAgent', () => {
@@ -236,6 +243,99 @@ describe('OrchestrationLoop', () => {
       for (const record of agent?.stepHistory ?? []) {
         expect(record.summary).toBeDefined()
       }
+    })
+
+    it('creates tracker doc on fresh start and removes on completion', async () => {
+      const { manager, agentId } = await setupAgent()
+      const loop = new OrchestrationLoop(manager)
+
+      mockSuccessfulSession()
+
+      const completed = new Promise<void>((resolve) => {
+        loop.on('agent:completed', () => resolve())
+      })
+
+      loop.startAgent(agentId)
+      await completed
+
+      // Tracker doc created once on start
+      expect(mockCreateTrackerDoc).toHaveBeenCalledTimes(1)
+      expect(mockCreateTrackerDoc).toHaveBeenCalledWith(
+        expect.stringContaining('feat-orchestration-loop'),
+        'feat-orchestration-loop',
+        twoPhaseRunbook
+      )
+
+      // Each of the 3 steps should have been checked off
+      expect(mockCheckOffStep).toHaveBeenCalledTimes(3)
+      expect(mockCheckOffStep).toHaveBeenCalledWith(
+        expect.stringContaining('feat-orchestration-loop'),
+        'feat-orchestration-loop',
+        0,
+        0
+      )
+      expect(mockCheckOffStep).toHaveBeenCalledWith(
+        expect.stringContaining('feat-orchestration-loop'),
+        'feat-orchestration-loop',
+        0,
+        1
+      )
+      expect(mockCheckOffStep).toHaveBeenCalledWith(
+        expect.stringContaining('feat-orchestration-loop'),
+        'feat-orchestration-loop',
+        1,
+        0
+      )
+
+      // Tracker doc removed on completion
+      expect(mockRemoveTrackerDoc).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not recreate tracker doc on restart from error', async () => {
+      const { manager, agentId } = await setupAgent()
+      const loop = new OrchestrationLoop(manager)
+
+      // First step errors
+      let callCount = 0
+      mockStartSession.mockImplementation(async function (this: {
+        emit: (event: string, ...args: unknown[]) => void
+      }) {
+        callCount++
+        if (callCount === 1) {
+          this.emit('error', new Error('CLI crash'))
+        } else {
+          this.emit('session:init', { sessionId: 'sdk-2', model: 'claude-opus-4-6', tools: [] })
+          this.emit('assistant:message', { text: 'Done.', toolUses: [] })
+          this.emit('session:result', {
+            subtype: 'success',
+            sessionId: 'sdk-2',
+            costUsd: 0.01,
+            numTurns: 1,
+            durationMs: 1000
+          })
+        }
+      })
+
+      const errored = new Promise<void>((resolve) => {
+        loop.on('agent:errored', () => resolve())
+      })
+      loop.startAgent(agentId)
+      await errored
+      await new Promise((r) => setTimeout(r, 10))
+
+      // Created once on initial fresh start
+      expect(mockCreateTrackerDoc).toHaveBeenCalledTimes(1)
+      mockCreateTrackerDoc.mockClear()
+
+      // Restart from error
+      const completed = new Promise<void>((resolve) => {
+        loop.on('agent:completed', () => resolve())
+      })
+      loop.startAgent(agentId)
+      await completed
+
+      // Should NOT create tracker doc on restart (would overwrite progress)
+      expect(mockCreateTrackerDoc).not.toHaveBeenCalled()
     })
   })
 

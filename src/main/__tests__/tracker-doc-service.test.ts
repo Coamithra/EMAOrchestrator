@@ -71,6 +71,17 @@ describe('generateTrackerContent', () => {
     const content = generateTrackerContent('feat-test', testRunbook)
     expect(content).not.toContain('- [x]')
   })
+
+  it('handles an empty runbook', () => {
+    const content = generateTrackerContent('feat-test', { phases: [] })
+    expect(content).toContain('# Tracker: feat-test')
+    expect(content).not.toContain('- [ ]')
+  })
+
+  it('preserves branch names with slashes in the header', () => {
+    const content = generateTrackerContent('feat/org/my-feature', testRunbook)
+    expect(content).toContain('# Tracker: feat/org/my-feature')
+  })
 })
 
 describe('createTrackerDoc', () => {
@@ -145,6 +156,26 @@ describe('checkOffStep', () => {
 
     const content = await readFile(trackerDocPath(tempDir, 'feat-test'), 'utf-8')
     expect(content).toContain('- [x] Pull latest main')
+  })
+
+  it('is a no-op for out-of-bounds phase index', async () => {
+    await createTrackerDoc(tempDir, 'feat-test', testRunbook)
+    const before = await readFile(trackerDocPath(tempDir, 'feat-test'), 'utf-8')
+
+    await checkOffStep(tempDir, 'feat-test', 99, 0)
+
+    const after = await readFile(trackerDocPath(tempDir, 'feat-test'), 'utf-8')
+    expect(after).toBe(before)
+  })
+
+  it('is a no-op for out-of-bounds step index', async () => {
+    await createTrackerDoc(tempDir, 'feat-test', testRunbook)
+    const before = await readFile(trackerDocPath(tempDir, 'feat-test'), 'utf-8')
+
+    await checkOffStep(tempDir, 'feat-test', 0, 99)
+
+    const after = await readFile(trackerDocPath(tempDir, 'feat-test'), 'utf-8')
+    expect(after).toBe(before)
   })
 })
 

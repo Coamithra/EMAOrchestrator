@@ -67,6 +67,7 @@ export async function checkOffStep(
   const lines = content.split('\n')
   let currentPhase = -1
   let currentStep = -1
+  let modified = false
 
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].startsWith('## ')) {
@@ -77,13 +78,18 @@ export async function checkOffStep(
     if (lines[i].startsWith('- [ ] ') || lines[i].startsWith('- [x] ')) {
       currentStep++
       if (currentPhase === phaseIndex && currentStep === stepIndex) {
-        lines[i] = lines[i].replace('- [ ] ', '- [x] ')
+        if (lines[i].startsWith('- [ ] ')) {
+          lines[i] = lines[i].replace('- [ ] ', '- [x] ')
+          modified = true
+        }
         break
       }
     }
   }
 
-  await writeFile(filePath, lines.join('\n'), 'utf-8')
+  if (modified) {
+    await writeFile(filePath, lines.join('\n'), 'utf-8')
+  }
 }
 
 /**

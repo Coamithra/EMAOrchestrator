@@ -258,6 +258,10 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     const sm = this.agentManager.getStateMachine(agentId)
     if (!sm) throw new Error(`Agent ${agentId} has no state machine`)
 
+    // Capture starting state before entering a phase (used to decide
+    // whether this is a fresh start or a restart from error/waiting).
+    const startingState = sm.getState()
+
     // Transition into a phase state from whatever starting state we're in
     this.enterPhaseState(agentId)
 
@@ -276,8 +280,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     // Move card to In Progress (fire-and-forget)
     this.trelloMoveToInProgress(agentId).catch(() => {})
 
-    // Create tracker doc in the worktree (fire-and-forget)
-    if (agent) {
+    // Create tracker doc only on fresh starts (not restarts from error/waiting)
+    if (agent && (startingState === 'idle' || startingState === 'picking_card')) {
       const runbook = this.agentManager.getRunbook(agentId)
       if (runbook) {
         createTrackerDoc(agent.worktree.path, agent.worktree.branch, runbook).catch(() => {})
