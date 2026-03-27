@@ -86,7 +86,11 @@ const api = {
 
   // Logging
   getAgentLog: (agentId: string): Promise<unknown> =>
-    ipcRenderer.invoke(IpcChannels.LOGGING_GET_LOG, agentId)
+    ipcRenderer.invoke(IpcChannels.LOGGING_GET_LOG, agentId),
+
+  // Runbook
+  getRunbook: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.RUNBOOK_GET),
+  refreshRunbook: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.RUNBOOK_REFRESH)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

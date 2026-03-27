@@ -33,6 +33,9 @@ function requireOrchestration(loop: OrchestrationLoop | null): OrchestrationLoop
   return loop
 }
 
+/** In-memory runbook, eagerly parsed on startup and config save. */
+let activeRunbook: Runbook | null = null
+
 /** Read the runbook file, check the cache, and parse with the configured parser. */
 async function resolveRunbook(config: AppConfig): Promise<Runbook> {
   const markdown = await readFile(config.contributingMdPath, 'utf-8')
@@ -74,7 +77,16 @@ export function registerIpcHandlers(
   // ---------------------------------------------------------------------------
 
   ipcMain.handle(IpcChannels.CONFIG_LOAD, async () => {
-    return await loadConfig()
+    const config = await loadConfig()
+    // Eagerly parse the runbook on app startup
+    if (config?.contributingMdPath && config?.targetRepoPath) {
+      resolveRunbook(config)
+        .then((r) => {
+          activeRunbook = r
+        })
+        .catch((err) => console.error('Eager runbook parse failed:', err))
+    }
+    return config
   })
 
   ipcMain.handle(IpcChannels.CONFIG_SAVE, async (_event, config: AppConfig) => {
@@ -86,6 +98,12 @@ export function registerIpcHandlers(
       result.claudeCliPath?.ok
     if (allOk) {
       await saveConfig(config)
+      // Eagerly parse the runbook so it's ready for agent creation
+      resolveRunbook(config)
+        .then((r) => {
+          activeRunbook = r
+        })
+        .catch((err) => console.error('Eager runbook parse failed:', err))
     }
     return result
   })
@@ -220,7 +238,7 @@ export function registerIpcHandlers(
     if (!config?.targetRepoPath || !config?.contributingMdPath) {
       throw new Error('App not configured — set target repo and CONTRIBUTING.md path first')
     }
-    const runbook = await resolveRunbook(config)
+    const runbook = activeRunbook ?? (await resolveRunbook(config))
     return await agentManager.createAgent(
       card,
       runbook,
@@ -293,12 +311,11 @@ export function registerIpcHandlers(
   ipcMain.handle(IpcChannels.TRELLO_GET_BACKLOG_CARDS, async () => {
     const config = await loadConfig()
     if (!config?.trelloApiKey || !config?.trelloApiToken || !config?.trelloBoardId) return []
-    const backlogListId = config.trelloListIds.backlog
-    if (!backlogListId) return []
-    return await getCardsFromList(backlogListId, {
-      apiKey: config.trelloApiKey,
-      apiToken: config.trelloApiToken
-    })
+    const backlogListIds = config.trelloListIds.backlog
+    if (!backlogListIds.length) return []
+    const creds = { apiKey: config.trelloApiKey, apiToken: config.trelloApiToken }
+    const results = await Promise.all(backlogListIds.map((id) => getCardsFromList(id, creds)))
+    return results.flat()
   })
 
   // ---------------------------------------------------------------------------
@@ -307,5 +324,25 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IpcChannels.LOGGING_GET_LOG, async (_event, agentId: string) => {
     return await readAgentLog(agentId)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Runbook
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IpcChannels.RUNBOOK_GET, () => {
+    return activeRunbook
+  })
+
+  ipcMain.handle(IpcChannels.RUNBOOK_REFRESH, async () => {
+    const config = await loadConfig()
+    if (!config?.contributingMdPath || !config?.targetRepoPath) return null
+    try {
+      activeRunbook = await resolveRunbook(config)
+      return activeRunbook
+    } catch (err) {
+      console.error('Runbook refresh failed:', err)
+      return null
+    }
   })
 }

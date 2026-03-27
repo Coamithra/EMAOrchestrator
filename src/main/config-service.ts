@@ -26,10 +26,15 @@ export async function loadConfig(): Promise<AppConfig | null> {
     const raw = await readFile(configPath(), 'utf-8')
     const parsed = JSON.parse(raw)
     // Deep-merge nested objects so partial saved configs don't lose default sub-keys
+    const mergedIds = { ...DEFAULT_CONFIG.trelloListIds, ...parsed.trelloListIds }
+    // Migrate backlog from single string to array
+    if (typeof mergedIds.backlog === 'string') {
+      mergedIds.backlog = mergedIds.backlog ? [mergedIds.backlog] : []
+    }
     const config = {
       ...DEFAULT_CONFIG,
       ...parsed,
-      trelloListIds: { ...DEFAULT_CONFIG.trelloListIds, ...parsed.trelloListIds }
+      trelloListIds: mergedIds
     }
     // Drop legacy trelloListNames if present
     delete (config as Record<string, unknown>).trelloListNames

@@ -16,6 +16,7 @@ import type { ConcurrencyStatus } from './orchestration-loop'
 import type { TrelloCard, TrelloList } from './trello'
 import type { AgentStateSnapshot, AgentStepProgress } from './agent-state'
 import type { LogEntry } from './logging'
+import type { Runbook } from './runbook'
 
 // ---------------------------------------------------------------------------
 // IPC Channel Constants
@@ -71,7 +72,11 @@ export const IpcChannels = {
   TRELLO_GET_BACKLOG_CARDS: 'trello:getBacklogCards',
 
   // Logging
-  LOGGING_GET_LOG: 'logging:getLog'
+  LOGGING_GET_LOG: 'logging:getLog',
+
+  // Runbook
+  RUNBOOK_GET: 'runbook:get',
+  RUNBOOK_REFRESH: 'runbook:refresh'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -172,4 +177,10 @@ export interface TrelloAPI {
 /** Logging API exposed to the renderer. */
 export interface LoggingAPI {
   getAgentLog(agentId: string): Promise<LogEntry[]>
+}
+
+/** Runbook API exposed to the renderer. */
+export interface RunbookAPI {
+  getRunbook(): Promise<Runbook | null>
+  refreshRunbook(): Promise<Runbook | null>
 }

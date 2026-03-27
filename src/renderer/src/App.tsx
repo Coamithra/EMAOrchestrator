@@ -6,8 +6,9 @@ import TopBar from './components/TopBar'
 import Settings from './components/Settings'
 import MainLayout from './components/MainLayout'
 import NewAgentDialog from './components/NewAgentDialog'
+import RunbookView from './components/RunbookView'
 
-type View = 'loading' | 'settings' | 'main'
+type View = 'loading' | 'settings' | 'main' | 'runbook'
 
 function App(): React.JSX.Element {
   const [view, setView] = useState<View>('loading')
@@ -138,6 +139,7 @@ function App(): React.JSX.Element {
   }, [])
 
   const handleSettingsClick = useCallback(() => setView('settings'), [])
+  const handleRunbookClick = useCallback(() => setView('runbook'), [])
 
   if (view === 'loading') {
     return <div style={{ padding: '2rem', color: 'var(--ev-c-text-2)' }}>Loading...</div>
@@ -154,9 +156,26 @@ function App(): React.JSX.Element {
     )
   }
 
+  if (view === 'runbook') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <TopBar
+          onNewAgentClick={handleNewAgentClick}
+          onSettingsClick={handleSettingsClick}
+          onRunbookClick={handleRunbookClick}
+        />
+        <RunbookView onBack={() => setView('main')} />
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <TopBar onNewAgentClick={handleNewAgentClick} onSettingsClick={handleSettingsClick} />
+      <TopBar
+        onNewAgentClick={handleNewAgentClick}
+        onSettingsClick={handleSettingsClick}
+        onRunbookClick={handleRunbookClick}
+      />
       <MainLayout agents={agents} />
       {showNewAgentDialog && (
         <NewAgentDialog

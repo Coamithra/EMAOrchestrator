@@ -1,5 +1,10 @@
-import { useState } from 'react'
-import type { AppConfig, ValidationResult, RunbookParserType, TrelloListRole } from '@shared/config'
+import { useState, useEffect, useRef } from 'react'
+import type {
+  AppConfig,
+  ValidationResult,
+  RunbookParserType,
+  SingleListRole
+} from '@shared/config'
 import { DEFAULT_CONFIG, extractBoardId } from '@shared/config'
 import type { TrelloList } from '@shared/trello'
 import SettingsField from './SettingsField'
@@ -12,13 +17,12 @@ interface SettingsProps {
   onCancel?: () => void
 }
 
-const ROLE_LABELS: Record<TrelloListRole, string> = {
-  backlog: 'Backlog',
+const SINGLE_ROLES: SingleListRole[] = ['inProgress', 'done']
+
+const SINGLE_ROLE_LABELS: Record<SingleListRole, string> = {
   inProgress: 'In Progress',
   done: 'Done'
 }
-
-const ALL_ROLES: TrelloListRole[] = ['backlog', 'inProgress', 'done']
 
 function Settings({
   initialConfig,
@@ -34,6 +38,15 @@ function Settings({
   const [fetchingLists, setFetchingLists] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
 
+  const didAutoFetch = useRef(false)
+  useEffect(() => {
+    if (didAutoFetch.current) return
+    if (config.trelloBoardId && config.trelloApiKey && config.trelloApiToken) {
+      didAutoFetch.current = true
+      handleFetchLists()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   function update<K extends keyof AppConfig>(key: K, value: AppConfig[K]): void {
     setConfig((prev) => ({ ...prev, [key]: value }))
     // Clear fetched lists when Trello credentials or board change — prevents saving
@@ -44,36 +57,59 @@ function Settings({
     }
   }
 
-  function assignRole(listId: string, role: TrelloListRole): void {
-    setConfig((prev) => {
-      const ids = { ...prev.trelloListIds }
-      // Assign this role to the selected list (overwrites previous assignment)
-      ids[role] = listId
-      // If this list was already assigned a different role, clear that
-      for (const r of ALL_ROLES) {
-        if (r !== role && ids[r] === listId) {
-          ids[r] = ''
-        }
-      }
-      return { ...prev, trelloListIds: ids }
-    })
+  function isBacklog(listId: string): boolean {
+    return config.trelloListIds.backlog.includes(listId)
   }
 
-  function clearRole(listId: string): void {
+  function assignBacklog(listId: string): void {
     setConfig((prev) => {
       const ids = { ...prev.trelloListIds }
-      for (const r of ALL_ROLES) {
+      if (!ids.backlog.includes(listId)) {
+        ids.backlog = [...ids.backlog, listId]
+      }
+      // Remove from single roles if it was assigned there
+      for (const r of SINGLE_ROLES) {
         if (ids[r] === listId) ids[r] = ''
       }
       return { ...prev, trelloListIds: ids }
     })
   }
 
-  function getRoleForList(listId: string): TrelloListRole | null {
-    for (const r of ALL_ROLES) {
+  function getSingleRole(listId: string): SingleListRole | null {
+    for (const r of SINGLE_ROLES) {
       if (config.trelloListIds[r] === listId) return r
     }
     return null
+  }
+
+  function assignSingleRole(listId: string, role: SingleListRole): void {
+    setConfig((prev) => {
+      const ids = { ...prev.trelloListIds }
+      ids[role] = listId
+      // Remove from backlog if it was there
+      ids.backlog = ids.backlog.filter((id) => id !== listId)
+      // Clear other single role if this list had one
+      for (const r of SINGLE_ROLES) {
+        if (r !== role && ids[r] === listId) ids[r] = ''
+      }
+      return { ...prev, trelloListIds: ids }
+    })
+  }
+
+  function clearRoles(listId: string): void {
+    setConfig((prev) => {
+      const ids = { ...prev.trelloListIds }
+      ids.backlog = ids.backlog.filter((id) => id !== listId)
+      for (const r of SINGLE_ROLES) {
+        if (ids[r] === listId) ids[r] = ''
+      }
+      return { ...prev, trelloListIds: ids }
+    })
+  }
+
+  function getEffectiveRole(listId: string): 'backlog' | SingleListRole | null {
+    if (isBacklog(listId)) return 'backlog'
+    return getSingleRole(listId)
   }
 
   async function handleFetchLists(): Promise<void> {
@@ -94,7 +130,12 @@ function Settings({
       setConfig((prev) => {
         const ids = { ...prev.trelloListIds }
         let changed = false
-        for (const r of ALL_ROLES) {
+        const prunedBacklog = ids.backlog.filter((id) => validIds.has(id))
+        if (prunedBacklog.length !== ids.backlog.length) {
+          ids.backlog = prunedBacklog
+          changed = true
+        }
+        for (const r of SINGLE_ROLES) {
           if (ids[r] && !validIds.has(ids[r])) {
             ids[r] = ''
             changed = true
@@ -272,34 +313,43 @@ function Settings({
                 <thead>
                   <tr>
                     <th>List</th>
-                    {ALL_ROLES.map((r) => (
-                      <th key={r}>{ROLE_LABELS[r]}</th>
+                    <th>Backlog</th>
+                    {SINGLE_ROLES.map((r) => (
+                      <th key={r}>{SINGLE_ROLE_LABELS[r]}</th>
                     ))}
                     <th>None</th>
                   </tr>
                 </thead>
                 <tbody>
                   {boardLists.map((list) => {
-                    const currentRole = getRoleForList(list.id)
+                    const role = getEffectiveRole(list.id)
                     return (
                       <tr key={list.id}>
                         <td className="settings__list-name">{list.name}</td>
-                        {ALL_ROLES.map((r) => (
+                        <td className="settings__list-radio">
+                          <input
+                            type="radio"
+                            name={`list-single-${list.id}`}
+                            checked={role === 'backlog'}
+                            onChange={() => assignBacklog(list.id)}
+                          />
+                        </td>
+                        {SINGLE_ROLES.map((r) => (
                           <td key={r} className="settings__list-radio">
                             <input
                               type="radio"
-                              name={`list-role-${list.id}`}
-                              checked={currentRole === r}
-                              onChange={() => assignRole(list.id, r)}
+                              name={`list-single-${list.id}`}
+                              checked={role === r}
+                              onChange={() => assignSingleRole(list.id, r)}
                             />
                           </td>
                         ))}
                         <td className="settings__list-radio">
                           <input
                             type="radio"
-                            name={`list-role-${list.id}`}
-                            checked={currentRole === null}
-                            onChange={() => clearRole(list.id)}
+                            name={`list-single-${list.id}`}
+                            checked={role === null}
+                            onChange={() => clearRoles(list.id)}
                           />
                         </td>
                       </tr>

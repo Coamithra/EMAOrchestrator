@@ -3,9 +3,14 @@ import './TopBar.css'
 interface TopBarProps {
   onNewAgentClick: () => void
   onSettingsClick: () => void
+  onRunbookClick: () => void
 }
 
-function TopBar({ onNewAgentClick, onSettingsClick }: TopBarProps): React.JSX.Element {
+function TopBar({
+  onNewAgentClick,
+  onSettingsClick,
+  onRunbookClick
+}: TopBarProps): React.JSX.Element {
   return (
     <header className="topbar">
       <div className="topbar__left">
@@ -14,6 +19,9 @@ function TopBar({ onNewAgentClick, onSettingsClick }: TopBarProps): React.JSX.El
       <div className="topbar__right">
         <button className="topbar__button" onClick={onNewAgentClick} title="New Agent">
           + New Agent
+        </button>
+        <button className="topbar__button" onClick={onRunbookClick} title="Runbook">
+          Runbook
         </button>
         <button
           className="topbar__button topbar__button--icon"
