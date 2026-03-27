@@ -8,7 +8,9 @@ import {
   cleanupOrphanedWorktrees
 } from './worktree-manager'
 import { removePersistedAgent } from './agent-persistence-service'
-import { parseRunbookFile } from './runbook-parser'
+import { parseRunbookContent } from './runbook-parser'
+import { parseRunbookSmart } from './smart-runbook-parser'
+import { getCachedRunbook, cacheRunbook } from './runbook-cache'
 import { getListsForBoard, getCardsFromList, getListIdByName } from './trello-service'
 import { readAgentLog } from './logging-service'
 import type { AgentManager } from './agent-manager'
@@ -23,9 +25,36 @@ import type {
 import type { WorktreeInfo } from '../shared/worktree'
 import { IpcChannels } from '../shared/ipc'
 
+import { readFile } from 'node:fs/promises'
+import type { Runbook } from '../shared/runbook'
+
 function requireOrchestration(loop: OrchestrationLoop | null): OrchestrationLoop {
   if (!loop) throw new Error('Orchestration not available — app config not loaded')
   return loop
+}
+
+/** Read the runbook file, check the cache, and parse with the configured parser. */
+async function resolveRunbook(config: AppConfig): Promise<Runbook> {
+  const markdown = await readFile(config.contributingMdPath, 'utf-8')
+  const parserType = config.runbookParser ?? 'regex'
+
+  const cached = await getCachedRunbook(markdown, parserType)
+  if (cached) return cached
+
+  let runbook: Runbook
+  if (parserType === 'smart') {
+    try {
+      runbook = await parseRunbookSmart(markdown)
+    } catch (err) {
+      console.error('Smart parser failed, falling back to regex:', err)
+      runbook = parseRunbookContent(markdown)
+    }
+  } else {
+    runbook = parseRunbookContent(markdown)
+  }
+
+  cacheRunbook(markdown, parserType, runbook).catch(() => {})
+  return runbook
 }
 
 export function registerIpcHandlers(
@@ -183,7 +212,7 @@ export function registerIpcHandlers(
     if (!config?.targetRepoPath || !config?.contributingMdPath) {
       throw new Error('App not configured — set target repo and CONTRIBUTING.md path first')
     }
-    const runbook = await parseRunbookFile(config.contributingMdPath)
+    const runbook = await resolveRunbook(config)
     return await agentManager.createAgent(
       card,
       runbook,

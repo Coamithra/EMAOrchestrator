@@ -1,7 +1,10 @@
+export type RunbookParserType = 'regex' | 'smart'
+
 export interface AppConfig {
   targetRepoPath: string
   contributingMdPath: string
   worktreeBasePath: string
+  runbookParser: RunbookParserType
   trelloApiKey: string
   trelloApiToken: string
   trelloBoardId: string
@@ -19,6 +22,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   targetRepoPath: '',
   contributingMdPath: 'CONTRIBUTING.md',
   worktreeBasePath: '',
+  runbookParser: 'regex',
   trelloApiKey: '',
   trelloApiToken: '',
   trelloBoardId: '',

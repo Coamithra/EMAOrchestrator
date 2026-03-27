@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AppConfig, ValidationResult } from '@shared/config'
+import type { AppConfig, ValidationResult, RunbookParserType } from '@shared/config'
 import { DEFAULT_CONFIG, extractBoardId } from '@shared/config'
 import SettingsField from './SettingsField'
 import './Settings.css'
@@ -121,6 +121,16 @@ function Settings({
               onChange={(e) => update('worktreeBasePath', e.target.value)}
               placeholder="Leave empty to use repo parent directory"
             />
+          </SettingsField>
+
+          <SettingsField label="Runbook Parser">
+            <select
+              value={config.runbookParser ?? 'regex'}
+              onChange={(e) => update('runbookParser', e.target.value as RunbookParserType)}
+            >
+              <option value="regex">Regex (fast, offline)</option>
+              <option value="smart">Smart — AI-powered (uses Claude CLI)</option>
+            </select>
           </SettingsField>
         </section>
 

@@ -69,6 +69,24 @@ Wraps `git worktree` commands into an async service. Stateless exported function
 - **`cleanupOrphanedWorktrees(repoPath)`** — Removes all orphans and their branches.
 - **Shared types:** `src/shared/worktree.ts` defines `WorktreeInfo` for use across main and renderer.
 
+### Smart Runbook Parser (`src/main/smart-runbook-parser.ts`)
+
+AI-powered alternative to the regex runbook parser. Uses the Agent SDK's `query()` to send the raw markdown to Claude with a system prompt instructing it to return structured JSON matching the `Runbook` schema.
+
+- **`parseRunbookSmart(markdown)`** — Sends markdown to Claude, extracts JSON from the response, validates and normalizes it into a `Runbook`. Uses `maxTurns: 1` with all tools denied (pure text generation).
+- **JSON extraction:** Handles both raw JSON and markdown-fenced JSON responses.
+- **Validation:** Normalizes `phase` and `index` fields on each step to match parent phase. Throws on missing required fields or empty phases/steps.
+- **Fallback:** The integration in `ipc-handlers.ts` catches errors and falls back to the regex parser if the smart parser fails.
+
+### Runbook Cache (`src/main/runbook-cache.ts`)
+
+Content-hash cache for parsed runbooks. Stateless exported functions (same pattern as config-service). Stored at `app.getPath('userData')/runbook-cache/`.
+
+- **`getCachedRunbook(markdown, parserType)`** — Returns cached `Runbook` if the content hash matches, `null` on miss.
+- **`cacheRunbook(markdown, parserType, runbook)`** — Stores a parsed runbook. Fire-and-forget safe.
+- **Cache key:** SHA-256 of `parserType:markdown`. Same content with different parser types produces different cache entries.
+- **Integration:** Called by `resolveRunbook()` in `ipc-handlers.ts` before and after parsing.
+
 ### Step Prompt Generator (`src/main/prompt-generator.ts`)
 
 Pure function that transforms a parsed `RunbookStep` + card context into a Claude prompt string. Called by the orchestration loop to generate the prompt for each step.
@@ -265,6 +283,7 @@ App config stored at `app.getPath('userData')/config.json`. Config service in `s
 
 - **`worktreeBasePath`** (string, optional) — Custom base directory for agent worktrees. When empty (default), worktrees are created as siblings to the repo directory.
 - **`trelloBoardId`** — The Settings UI accepts either a raw board ID or a full Trello URL (`https://trello.com/b/<id>/...`). The `extractBoardId()` utility in `src/shared/config.ts` extracts the ID from URLs on input.
+- **`runbookParser`** (`'regex' | 'smart'`, default `'regex'`) — Which parser to use for CONTRIBUTING.md. `regex` is the original line-scanner (fast, offline, free). `smart` sends the markdown to Claude via the Agent SDK for AI-powered parsing — handles varied markdown structures and filters out non-workflow sections (reference tables, appendices). Configurable in Settings under the Repository section.
 
 ## Worktree Layout
 
