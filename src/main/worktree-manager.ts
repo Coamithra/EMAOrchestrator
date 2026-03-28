@@ -54,7 +54,7 @@ export async function listWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
 }
 
 /**
- * Create a new worktree with a new branch based on the repo's default branch.
+ * Create a new worktree with a new branch based on the given or auto-detected default branch.
  *
  * By default, the worktree is created as a sibling to the repo directory:
  *   repoPath = C:\Proj\main  →  worktree at C:\Proj\<branch>
@@ -197,7 +197,8 @@ async function getDefaultBranch(repoPath: string): Promise<string> {
  */
 export async function listRemoteBranches(repoPath: string): Promise<string[]> {
   const { stdout } = await execFileAsync('git', ['ls-remote', '--heads', 'origin'], {
-    cwd: repoPath
+    cwd: repoPath,
+    timeout: 15000
   })
   return stdout
     .trim()

@@ -190,6 +190,15 @@ describe('AgentManager', () => {
       )
     })
 
+    it('passes defaultBranch to createWorktree when provided', async () => {
+      const mgr = new AgentManager()
+      await mgr.createAgent(testCard, twoPhaseRunbook, repoPath, undefined, 'master')
+
+      expect(mockCreateWorktree).toHaveBeenCalledWith(
+        repoPath, 'feat-agent-manager', undefined, 'master'
+      )
+    })
+
     it('handles card names without a number prefix', async () => {
       const mgr = new AgentManager()
       await mgr.createAgent(

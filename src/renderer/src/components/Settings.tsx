@@ -58,6 +58,10 @@ function Settings({
       setBoardLists([])
       setListError(null)
     }
+    if (key === 'targetRepoPath') {
+      setRemoteBranches([])
+      setBranchError(null)
+    }
   }
 
   function isBacklog(listId: string): boolean {

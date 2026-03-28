@@ -23,7 +23,8 @@ import {
   createWorktree,
   removeWorktree,
   getOrphanedWorktrees,
-  cleanupOrphanedWorktrees
+  cleanupOrphanedWorktrees,
+  listRemoteBranches
 } from '../worktree-manager'
 
 beforeEach(() => {
@@ -179,6 +180,62 @@ describe('createWorktree', () => {
 
     await expect(createWorktree('C:/Proj/main', 'feat/dupe')).rejects.toThrow(
       'Worktree directory already exists'
+    )
+  })
+
+  it('uses provided defaultBranch instead of auto-detecting', async () => {
+    mockAccess.mockRejectedValueOnce(new Error('ENOENT'))
+    // Branch doesn't exist
+    mockExecFile.mockRejectedValueOnce(new Error('not a valid ref'))
+    // git worktree add succeeds (no symbolic-ref call expected)
+    mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    const result = await createWorktree('C:/Proj/main', 'feat/thing', undefined, 'master')
+
+    expect(result.branch).toBe('feat/thing')
+    expect(mockExecFile).toHaveBeenCalledWith(
+      'git',
+      ['worktree', 'add', expect.stringContaining('feat'), '-b', 'feat/thing', 'master'],
+      { cwd: 'C:/Proj/main' }
+    )
+    // Should NOT have called symbolic-ref (only 2 execFile calls: rev-parse + worktree add)
+    expect(mockExecFile).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ── listRemoteBranches ──────────────────────────────────────────────────
+
+describe('listRemoteBranches', () => {
+  it('parses remote branch names from git ls-remote output', async () => {
+    mockExecFile.mockResolvedValueOnce({
+      stdout:
+        'abc123\trefs/heads/main\ndef456\trefs/heads/develop\nghi789\trefs/heads/feat/thing\n',
+      stderr: ''
+    })
+
+    const result = await listRemoteBranches('C:/Proj/main')
+
+    expect(result).toEqual(['main', 'develop', 'feat/thing'])
+    expect(mockExecFile).toHaveBeenCalledWith(
+      'git',
+      ['ls-remote', '--heads', 'origin'],
+      { cwd: 'C:/Proj/main', timeout: 15000 }
+    )
+  })
+
+  it('returns empty array for empty output', async () => {
+    mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    const result = await listRemoteBranches('C:/Proj/main')
+
+    expect(result).toEqual([])
+  })
+
+  it('throws on git failure', async () => {
+    mockExecFile.mockRejectedValueOnce(new Error('fatal: not a git repository'))
+
+    await expect(listRemoteBranches('C:/Proj/main')).rejects.toThrow(
+      'fatal: not a git repository'
     )
   })
 })
