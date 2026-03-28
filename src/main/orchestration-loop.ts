@@ -271,6 +271,10 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     const sm = this.agentManager.getStateMachine(agentId)
     if (!sm) throw new Error(`Agent ${agentId} has no state machine`)
 
+    // Load config once for the entire agent loop — needed for targetRepoPath
+    // as cwd so the SDK finds .claude/settings.* in the project root.
+    const config = await loadConfig()
+
     // Capture starting state before entering a phase (used to decide
     // whether this is a fresh start or a restart from error/waiting).
     const startingState = sm.getState()
@@ -371,7 +375,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       this.emitStepBanner(agentId, snapshot, phase.name, step.title)
 
       entry.stepStartedAt = Date.now()
-      const ok = await this.runStep(entry, prompt, this.approvalMode, step.title)
+      const ok = await this.runStep(entry, prompt, this.approvalMode, step.title, config)
       if (entry.stopped) break
 
       const stepDurationMs = Date.now() - entry.stepStartedAt
@@ -496,7 +500,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     entry: RunningAgent,
     prompt: string,
     approvalMode?: ApprovalMode,
-    stepTitle?: string
+    stepTitle?: string,
+    config?: Awaited<ReturnType<typeof loadConfig>>
   ): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       const { agentId } = entry
@@ -603,10 +608,14 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         safeResolve(false)
       })
 
+      // Use the target repo root as cwd so the SDK finds .claude/settings.*
+      // for permission rules. The prompt already tells the agent the worktree path.
+      const cwd = config?.targetRepoPath || agent.worktree.path
+
       driver
         .startSession({
           prompt,
-          cwd: agent.worktree.path,
+          cwd,
           sessionId: entry.sdkSessionId ?? undefined,
           settingSources: ['user', 'project', 'local'],
           approvalMode,
