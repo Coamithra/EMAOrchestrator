@@ -116,8 +116,12 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
 // Public API
 // ---------------------------------------------------------------------------
 
-/** Start the global event listener. Call once at app startup. */
+let initialized = false
+
+/** Start the global event listener. Call once at app startup. Idempotent. */
 export function initTerminalBuffer(): void {
+  if (initialized) return
+  initialized = true
   window.api.onCliEvent((payload: CliEventPayload) => {
     const match = payload.sessionId.match(/^orchestration-(.+)$/)
     if (!match) return
