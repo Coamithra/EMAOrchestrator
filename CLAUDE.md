@@ -58,8 +58,10 @@ Stateless exported functions for Trello REST API operations. Uses native `fetch(
 - **`getCardsFromList(listId, creds)`** — Fetches all open cards from a list.
 - **`moveCard(cardId, targetListId, creds)`** — Moves a card to a different list (PUT).
 - **`addComment(cardId, text, creds)`** — Posts a comment on a card (POST).
-- **Shared types:** `src/shared/trello.ts` defines `TrelloCredentials`, `TrelloList`, `TrelloCard`.
+- **`moveCardToSourceList(cardId, sourceListId, backlogListIds, creds)`** — Moves a card back to its source list. Falls back to the first backlog list if `sourceListId` is empty/undefined (backward compat for pre-existing agents). Fire-and-forget safe.
+- **Shared types:** `src/shared/trello.ts` defines `TrelloCredentials`, `TrelloList`, `TrelloCard`. `TrelloCard.sourceListId` (optional) is set by the backlog card fetcher to track which list a card was sourced from.
 - **Orchestration integration:** The orchestration loop uses `config.trelloListIds` directly (no runtime name→ID resolution). Calls `moveCard` (to In Progress on start, to Done on completion) and `addComment` (summary on completion) as fire-and-forget operations that never block agent work.
+- **Card cleanup:** When an agent is dismissed or detected as stale on startup, `moveCardToSourceList` returns the Trello card to its original list. The source list is tracked via `CardInfo.sourceListId`, threaded from the backlog card fetch through agent creation to persistence.
 - **IPC channels:** `trello:getLists`, `trello:getListsForBoard`, `trello:getBacklogCards` — for the renderer to fetch board data. `getListsForBoard` accepts explicit credentials (used by Settings to fetch lists before saving).
 
 ### Worktree Manager (`src/main/worktree-manager.ts`)

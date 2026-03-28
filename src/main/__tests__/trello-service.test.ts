@@ -8,7 +8,8 @@ import {
   getListIdByName,
   getCardsFromList,
   moveCard,
-  addComment
+  addComment,
+  moveCardToSourceList
 } from '../trello-service'
 
 const creds = { apiKey: 'key123', apiToken: 'tok456' }
@@ -204,5 +205,47 @@ describe('addComment', () => {
 
     expect(await addComment('card1', 'test', creds)).toBe(true)
     expect(mockFetch).toHaveBeenCalledTimes(3)
+  })
+})
+
+// ── moveCardToSourceList ─────────────────────────────────────────────────
+
+describe('moveCardToSourceList', () => {
+  it('moves card to sourceListId when provided', async () => {
+    mockFetch.mockResolvedValue({ ok: true })
+    await moveCardToSourceList('card-1', 'source-list', ['backlog-list'], creds)
+
+    expect(mockFetch).toHaveBeenCalledOnce()
+    const url = mockFetch.mock.calls[0][0] as string
+    expect(url).toContain('idList=source-list')
+    expect(url).toContain('cards/card-1')
+  })
+
+  it('falls back to first backlog list when sourceListId is empty', async () => {
+    mockFetch.mockResolvedValue({ ok: true })
+    await moveCardToSourceList('card-1', '', ['backlog-list'], creds)
+
+    expect(mockFetch).toHaveBeenCalledOnce()
+    const url = mockFetch.mock.calls[0][0] as string
+    expect(url).toContain('idList=backlog-list')
+  })
+
+  it('falls back to first backlog list when sourceListId is undefined', async () => {
+    mockFetch.mockResolvedValue({ ok: true })
+    await moveCardToSourceList('card-1', undefined, ['backlog-list'], creds)
+
+    expect(mockFetch).toHaveBeenCalledOnce()
+    const url = mockFetch.mock.calls[0][0] as string
+    expect(url).toContain('idList=backlog-list')
+  })
+
+  it('does nothing when no sourceListId and no backlog lists', async () => {
+    await moveCardToSourceList('card-1', '', [], creds)
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when sourceListId is undefined and backlog is empty', async () => {
+    await moveCardToSourceList('card-1', undefined, [], creds)
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 })

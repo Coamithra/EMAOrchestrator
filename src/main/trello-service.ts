@@ -99,6 +99,22 @@ export async function addComment(
 }
 
 /**
+ * Move a card back to its source list. Falls back to the first backlog list
+ * if sourceListId is missing (backward compat for pre-existing agents).
+ * Fire-and-forget safe — swallows errors silently (moveCard already logs).
+ */
+export async function moveCardToSourceList(
+  cardId: string,
+  sourceListId: string | undefined,
+  backlogListIds: string[],
+  creds: TrelloCredentials
+): Promise<void> {
+  const targetListId = sourceListId || backlogListIds[0]
+  if (!targetListId) return
+  await moveCard(cardId, targetListId, creds)
+}
+
+/**
  * Execute a Trello mutation with retry and exponential backoff.
  * Retries on network errors and 5xx server errors. Does not retry 4xx client errors.
  */
