@@ -831,7 +831,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
  * The step prompt asks Claude to provide a summary after a `---` separator.
  * Falls back to the last complete paragraph, then to a tail slice.
  */
-function extractStepSummary(text: string): string {
+export function extractStepSummary(text: string): string {
   if (!text) return 'Step completed.'
 
   // Strategy 1: text after the last "---" separator (matches prompt convention)
@@ -846,12 +846,9 @@ function extractStepSummary(text: string): string {
   // Strategy 2: last non-empty paragraph (double-newline delimited)
   const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 0)
   if (paragraphs.length > 0) {
-    const lastParagraph = paragraphs[paragraphs.length - 1].trim()
-    if (lastParagraph.length > 0) {
-      return lastParagraph.slice(0, 500)
-    }
+    return paragraphs[paragraphs.length - 1].trim().slice(0, 500)
   }
 
   // Strategy 3: tail slice (original behavior, kept as last resort)
-  return text.slice(-500) || 'Step completed.'
+  return text.slice(-500)
 }

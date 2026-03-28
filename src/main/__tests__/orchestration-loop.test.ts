@@ -26,7 +26,14 @@ vi.mock('../cli-driver', async () => {
     getSessionId = vi.fn().mockReturnValue(null)
   }
 
-  return { CliDriver: MockCliDriver }
+  return {
+    CliDriver: MockCliDriver,
+    summarizeToolInput: (_toolName: string, input: Record<string, unknown>) => {
+      if (input.file_path) return String(input.file_path)
+      if (input.command) return String(input.command)
+      return JSON.stringify(input).slice(0, 60)
+    }
+  }
 })
 
 // Mock BrowserWindow to prevent Electron errors
@@ -870,5 +877,57 @@ describe('OrchestrationLoop', () => {
       loop.setMaxConcurrentAgents(-5)
       expect(loop.getConcurrencyStatus().max).toBe(1)
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// extractStepSummary — pure function, no mocks needed
+// ---------------------------------------------------------------------------
+
+// Import after mocks are defined (vitest hoists vi.mock calls)
+const { extractStepSummary } = await import('../orchestration-loop')
+
+describe('extractStepSummary', () => {
+  it('returns default message for empty text', () => {
+    expect(extractStepSummary('')).toBe('Step completed.')
+  })
+
+  it('extracts text after the last --- separator', () => {
+    const text = 'Some work output\n---\nHere is the summary of what was done.'
+    expect(extractStepSummary(text)).toBe('Here is the summary of what was done.')
+  })
+
+  it('uses last --- when multiple separators exist', () => {
+    const text = 'Section 1\n---\nSection 2\n---\nFinal summary paragraph.'
+    expect(extractStepSummary(text)).toBe('Final summary paragraph.')
+  })
+
+  it('falls back to last paragraph when no separator', () => {
+    const text = 'First paragraph.\n\nSecond paragraph.\n\nThird and final paragraph.'
+    expect(extractStepSummary(text)).toBe('Third and final paragraph.')
+  })
+
+  it('falls back to tail slice for single-line text without separator', () => {
+    const text = 'Just a single line of text'
+    expect(extractStepSummary(text)).toBe('Just a single line of text')
+  })
+
+  it('caps output at 500 characters', () => {
+    const longSummary = 'x'.repeat(600)
+    const text = `Some output\n---\n${longSummary}`
+    expect(extractStepSummary(text).length).toBe(500)
+  })
+
+  it('skips empty separator trailing content', () => {
+    const text = 'Content here\n---\n  \n\nActual last paragraph.'
+    // Separator content is whitespace-only, but trim() makes it empty, so
+    // it falls through to paragraph extraction
+    expect(extractStepSummary(text)).toBe('Actual last paragraph.')
+  })
+
+  it('handles text with only whitespace after separator', () => {
+    const text = 'Content\n\nMore content\n---\n   '
+    // After separator is whitespace-only → falls to paragraph strategy → last paragraph
+    expect(extractStepSummary(text)).toBe('More content\n---')
   })
 })
