@@ -36,7 +36,7 @@ import {
 function makePersistedAgent(overrides?: Partial<PersistedAgent>): PersistedAgent {
   return {
     id: 'agent-1',
-    card: { id: 'card-1', name: '#012 Test', description: 'A test card' },
+    card: { id: 'card-1', name: '#012 Test', description: 'A test card', sourceListId: 'list-1' },
     worktree: { path: 'C:/Proj/feat-test', branch: 'feat-test', isMain: false },
     runbook: {
       phases: [

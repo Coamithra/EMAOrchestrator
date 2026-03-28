@@ -88,7 +88,8 @@ const twoPhaseRunbook: Runbook = {
 const testCard: CardInfo = {
   id: 'card-123',
   name: '#013 Orchestration loop',
-  description: 'The main loop'
+  description: 'The main loop',
+  sourceListId: 'list-1'
 }
 
 function fakeWorktree(branch: string): WorktreeInfo {
@@ -581,7 +582,8 @@ describe('OrchestrationLoop', () => {
         const card: CardInfo = {
           id: `card-${i}`,
           name: `#${i} Test card ${i}`,
-          description: `Card ${i}`
+          description: `Card ${i}`,
+          sourceListId: 'list-1'
         }
         mockCreateWorktree.mockResolvedValue(fakeWorktree(`feat-test-card-${i}`))
         agentIds.push(await manager.createAgent(card, twoPhaseRunbook, 'C:/Proj/main'))

@@ -13,6 +13,7 @@ import {
 } from './agent-persistence-service'
 import { loadConfig } from './config-service'
 import { cleanupOrphanedWorktrees } from './worktree-manager'
+import { moveCard } from './trello-service'
 import { IpcChannels, type AgentEventPayload } from '../shared/ipc'
 
 const agentManager = new AgentManager()
@@ -115,10 +116,25 @@ async function restorePersistedAgents(): Promise<void> {
 
   const results = await reconcileAgents(store)
 
+  // Build Trello creds for stale-agent card moves (fire-and-forget)
+  const trelloCreds =
+    config.trelloApiKey && config.trelloApiToken
+      ? { apiKey: config.trelloApiKey, apiToken: config.trelloApiToken }
+      : null
+
   // Restore non-stale agents
   const restoredWorktreePaths = new Set<string>()
   for (const result of results) {
     if (result.status === 'stale') {
+      // Move the card back to its source list before removing
+      const staleAgent = store.agents[result.agentId]
+      if (trelloCreds && staleAgent?.card) {
+        const targetListId =
+          staleAgent.card.sourceListId || config.trelloListIds.backlog[0]
+        if (targetListId) {
+          moveCard(staleAgent.card.id, targetListId, trelloCreds).catch(() => {})
+        }
+      }
       // Remove stale agents from the store
       delete store.agents[result.agentId]
       continue

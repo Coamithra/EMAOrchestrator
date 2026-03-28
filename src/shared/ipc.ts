@@ -177,7 +177,12 @@ export interface OrchestrationAPI {
 
 /** Agent creation API exposed to the renderer. */
 export interface AgentCreateAPI {
-  createAgent(card: { id: string; name: string; description: string }): Promise<string>
+  createAgent(card: {
+    id: string
+    name: string
+    description: string
+    sourceListId: string
+  }): Promise<string>
 }
 
 /** Trello API exposed to the renderer. */

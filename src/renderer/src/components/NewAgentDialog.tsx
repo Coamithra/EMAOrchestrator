@@ -46,7 +46,8 @@ function NewAgentDialog({ onCreated, onClose }: NewAgentDialogProps): React.JSX.
       const agentId = await window.api.createAgent({
         id: card.id,
         name: card.name,
-        description: card.description
+        description: card.description,
+        sourceListId: card.sourceListId ?? ''
       })
       onCreated(agentId)
     } catch (err) {

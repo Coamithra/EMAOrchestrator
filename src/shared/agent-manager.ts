@@ -8,6 +8,8 @@ export interface CardInfo {
   id: string
   name: string
   description: string
+  /** The Trello list this card was sourced from (used to return it on agent cleanup). */
+  sourceListId: string
 }
 
 /** Full snapshot of an agent, suitable for rendering in the UI. */

@@ -12,7 +12,7 @@ import { removePersistedAgent } from './agent-persistence-service'
 import { parseRunbookContent } from './runbook-parser'
 import { parseRunbookSmart } from './smart-runbook-parser'
 import { getCachedRunbook, cacheRunbook } from './runbook-cache'
-import { getListsForBoard, getCardsFromList } from './trello-service'
+import { getListsForBoard, getCardsFromList, moveCard } from './trello-service'
 import { readAgentLog } from './logging-service'
 import type { AgentManager } from './agent-manager'
 import type { CardInfo } from '../shared/agent-manager'
@@ -28,6 +28,22 @@ import { IpcChannels } from '../shared/ipc'
 
 import { readFile } from 'node:fs/promises'
 import type { Runbook } from '../shared/runbook'
+
+/**
+ * Move a card back to its source list (fire-and-forget safe).
+ * Falls back to the first configured backlog list if sourceListId is missing
+ * (backward compat for agents persisted before this field existed).
+ */
+async function moveCardToSourceList(
+  card: CardInfo,
+  config: AppConfig | null
+): Promise<void> {
+  if (!config?.trelloApiKey || !config?.trelloApiToken) return
+  const creds = { apiKey: config.trelloApiKey, apiToken: config.trelloApiToken }
+  const targetListId = card.sourceListId || config.trelloListIds.backlog[0]
+  if (!targetListId) return
+  await moveCard(card.id, targetListId, creds)
+}
 
 function requireOrchestration(loop: OrchestrationLoop | null): OrchestrationLoop {
   if (!loop) throw new Error('Orchestration not available — app config not loaded')
@@ -225,6 +241,10 @@ export function registerIpcHandlers(
         orchestrationLoop.stopAgent(agentId)
       }
       const config = await loadConfig()
+      // Move card back to its source list (fire-and-forget)
+      if (agent.stateSnapshot.state !== 'done') {
+        moveCardToSourceList(agent.card, config).catch(() => {})
+      }
       if (config?.targetRepoPath) {
         await agentManager.destroyAgent(agentId, config.targetRepoPath)
         return // destroyAgent already calls removePersistedAgent
@@ -320,7 +340,12 @@ export function registerIpcHandlers(
     const backlogListIds = config.trelloListIds.backlog
     if (!backlogListIds.length) return []
     const creds = { apiKey: config.trelloApiKey, apiToken: config.trelloApiToken }
-    const results = await Promise.all(backlogListIds.map((id) => getCardsFromList(id, creds)))
+    const results = await Promise.all(
+      backlogListIds.map(async (listId) => {
+        const cards = await getCardsFromList(listId, creds)
+        return cards.map((c) => ({ ...c, sourceListId: listId }))
+      })
+    )
     return results.flat()
   })
 

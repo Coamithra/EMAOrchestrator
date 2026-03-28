@@ -46,7 +46,12 @@ const api = {
     ipcRenderer.invoke(IpcChannels.WORKTREE_LIST_BRANCHES, repoPath),
 
   // Agent creation
-  createAgent: (card: { id: string; name: string; description: string }): Promise<string> =>
+  createAgent: (card: {
+    id: string
+    name: string
+    description: string
+    sourceListId: string
+  }): Promise<string> =>
     ipcRenderer.invoke(IpcChannels.AGENT_CREATE, card),
 
   // Agent persistence

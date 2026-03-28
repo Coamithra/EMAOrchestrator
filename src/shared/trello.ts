@@ -15,4 +15,6 @@ export interface TrelloCard {
   id: string
   name: string
   description: string
+  /** The list this card was fetched from (used to return it on agent cleanup). */
+  sourceListId?: string
 }

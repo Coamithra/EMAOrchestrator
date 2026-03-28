@@ -49,7 +49,8 @@ const twoPhaseRunbook: Runbook = {
 const testCard: CardInfo = {
   id: 'card-123',
   name: '#011 Agent manager',
-  description: 'Central registry for agents'
+  description: 'Central registry for agents',
+  sourceListId: 'list-1'
 }
 
 const repoPath = 'C:/Proj/main'
@@ -149,7 +150,7 @@ describe('AgentManager', () => {
 
     it('can create multiple agents', async () => {
       const mgr = new AgentManager()
-      const card2: CardInfo = { id: 'card-456', name: '#012 State persistence', description: '' }
+      const card2: CardInfo = { id: 'card-456', name: '#012 State persistence', description: '', sourceListId: 'list-1' }
 
       const id1 = await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
       const id2 = await mgr.createAgent(card2, twoPhaseRunbook, repoPath)
@@ -162,7 +163,7 @@ describe('AgentManager', () => {
       const mgr = new AgentManager()
 
       await mgr.createAgent(
-        { id: '1', name: '#005 CLI driver', description: '' },
+        { id: '1', name: '#005 CLI driver', description: '', sourceListId: 'list-1' },
         twoPhaseRunbook,
         repoPath
       )
@@ -172,7 +173,7 @@ describe('AgentManager', () => {
 
       mockCreateWorktree.mockClear()
       await mgr.createAgent(
-        { id: '2', name: '#021 Error handling & recovery', description: '' },
+        { id: '2', name: '#021 Error handling & recovery', description: '', sourceListId: 'list-1' },
         twoPhaseRunbook,
         repoPath
       )
@@ -202,7 +203,7 @@ describe('AgentManager', () => {
     it('handles card names without a number prefix', async () => {
       const mgr = new AgentManager()
       await mgr.createAgent(
-        { id: '1', name: 'Agent manager', description: '' },
+        { id: '1', name: 'Agent manager', description: '', sourceListId: 'list-1' },
         twoPhaseRunbook,
         repoPath
       )
@@ -260,7 +261,7 @@ describe('AgentManager', () => {
       const mgr = new AgentManager()
       await mgr.createAgent(testCard, twoPhaseRunbook, repoPath)
       await mgr.createAgent(
-        { id: 'c2', name: '#012 State persistence', description: '' },
+        { id: 'c2', name: '#012 State persistence', description: '', sourceListId: 'list-1' },
         twoPhaseRunbook,
         repoPath
       )
