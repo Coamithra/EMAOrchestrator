@@ -54,7 +54,7 @@
   word-break: break-all;
 }
 
-.permission-dialog__btn--remember {
+.interaction-dialog__btn--remember {
   background: #d97706;
   color: #fff;
 }

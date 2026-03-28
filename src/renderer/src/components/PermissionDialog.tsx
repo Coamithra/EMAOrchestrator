@@ -70,8 +70,9 @@ function PermissionDialog({ request, onRespond }: PermissionDialogProps): React.
             Deny
           </button>
           <button
-            className="interaction-dialog__btn permission-dialog__btn--remember"
+            className="interaction-dialog__btn interaction-dialog__btn--remember"
             onClick={handleAllowAndRemember}
+            title="Allow and remember this tool pattern for all future sessions"
           >
             Always Allow
           </button>

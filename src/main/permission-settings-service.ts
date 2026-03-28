@@ -47,10 +47,12 @@ export function generateToolPattern(toolName: string, toolInput: Record<string, 
 /**
  * Extract a meaningful command prefix for Bash pattern matching.
  * Takes words from the start that look like command verbs (not arguments or paths).
- * Max 3 words to keep patterns useful.
+ * Max 2 words to keep patterns at the right granularity.
  */
 function extractCommandPrefix(command: string): string {
-  const words = command.trim().split(/\s+/)
+  // Strip everything after shell operators so chained commands don't leak into the prefix
+  const sanitized = command.trim().split(/\s*(?:&&|\|\||[;|])\s*/)[0]
+  const words = sanitized.split(/\s+/)
   const prefixWords: string[] = []
 
   for (const word of words) {
@@ -76,12 +78,15 @@ function settingsLocalPath(repoPath: string): string {
 }
 
 async function readSettingsLocal(repoPath: string): Promise<SettingsLocalJson> {
+  let raw: string
   try {
-    const raw = await readFile(settingsLocalPath(repoPath), 'utf-8')
-    return JSON.parse(raw) as SettingsLocalJson
+    raw = await readFile(settingsLocalPath(repoPath), 'utf-8')
   } catch {
+    // File doesn't exist yet — start fresh
     return {}
   }
+  // Parse errors propagate so we don't silently overwrite a corrupt file
+  return JSON.parse(raw) as SettingsLocalJson
 }
 
 async function writeSettingsLocal(repoPath: string, settings: SettingsLocalJson): Promise<void> {

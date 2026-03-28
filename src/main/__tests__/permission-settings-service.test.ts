@@ -82,6 +82,17 @@ describe('generateToolPattern', () => {
     expect(generateToolPattern('Bash', {})).toBe('Bash')
     expect(generateToolPattern('Bash', { command: 123 })).toBe('Bash')
   })
+
+  it('strips shell operators before extracting prefix', () => {
+    expect(generateToolPattern('Bash', { command: 'echo hello && rm -rf /' })).toBe(
+      'Bash(echo hello:*)'
+    )
+    expect(generateToolPattern('Bash', { command: 'cat file.txt | grep foo' })).toBe(
+      'Bash(cat file.txt:*)'
+    )
+    expect(generateToolPattern('Bash', { command: 'a; b' })).toBe('Bash(a:*)')
+    expect(generateToolPattern('Bash', { command: 'cmd1 || cmd2' })).toBe('Bash(cmd1:*)')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -138,5 +149,13 @@ describe('addAllowedToolPattern', () => {
   it('no-ops with empty repoPath', async () => {
     await addAllowedToolPattern('', 'Write')
     expect(files.size).toBe(0)
+  })
+
+  it('throws on corrupt JSON instead of silently overwriting', async () => {
+    files.set(settingsPath, '{ invalid json }}}')
+
+    await expect(addAllowedToolPattern(repoPath, 'Write')).rejects.toThrow()
+    // File should not have been overwritten
+    expect(files.get(settingsPath)).toBe('{ invalid json }}}')
   })
 })
