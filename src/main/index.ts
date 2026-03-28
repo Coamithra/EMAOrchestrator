@@ -175,7 +175,9 @@ app.whenReady().then(async () => {
   orchestrationLoop = new OrchestrationLoop(
     agentManager,
     config?.maxConcurrentAgents,
-    (config?.stuckAgentTimeoutMinutes ?? 10) * 60 * 1000
+    (config?.stuckAgentTimeoutMinutes ?? 10) * 60 * 1000,
+    undefined,
+    config?.approvalMode
   )
 
   registerIpcHandlers(agentManager, orchestrationLoop)

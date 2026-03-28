@@ -99,6 +99,11 @@ export function registerIpcHandlers(
       result.claudeCliPath?.ok
     if (allOk) {
       await saveConfig(config)
+      // Live-update orchestration settings
+      if (orchestrationLoop) {
+        orchestrationLoop.setMaxConcurrentAgents(config.maxConcurrentAgents)
+        orchestrationLoop.setApprovalMode(config.approvalMode)
+      }
       // Eagerly parse the runbook so it's ready for agent creation
       resolveRunbook(config)
         .then((r) => {

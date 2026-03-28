@@ -13,6 +13,7 @@ import type {
   PermissionResponse,
   UserQuestionResponse
 } from '../shared/cli-driver'
+import type { ApprovalMode } from '../shared/config'
 import type { CliEventPayload } from '../shared/ipc'
 import type { OrchestrationLoopEvents, ConcurrencyStatus } from '../shared/orchestration-loop'
 import type { LogEntry } from '../shared/logging'
@@ -48,15 +49,18 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
   private readonly running = new Map<string, RunningAgent>()
   private readonly queued: string[] = []
   private maxConcurrentAgents: number
+  private approvalMode: ApprovalMode = 'never'
 
   constructor(
     private readonly agentManager: AgentManager,
     maxConcurrentAgents = 3,
     private stuckTimeoutMs = 10 * 60 * 1000,
-    private stuckCheckIntervalMs = 60_000
+    private stuckCheckIntervalMs = 60_000,
+    approvalMode: ApprovalMode = 'never'
   ) {
     super()
     this.maxConcurrentAgents = maxConcurrentAgents
+    this.approvalMode = approvalMode
   }
 
   /**
@@ -171,6 +175,11 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.maxConcurrentAgents = Math.max(1, Math.floor(max))
     // If the new limit is higher, try to dequeue waiting agents
     this.tryDequeue()
+  }
+
+  /** Update the approval mode for new permission requests. */
+  setApprovalMode(mode: ApprovalMode): void {
+    this.approvalMode = mode
   }
 
   /** Abort all running agent loops and clear the queue. Called on app quit. */
@@ -362,7 +371,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       this.emitStepBanner(agentId, snapshot, phase.name, step.title)
 
       entry.stepStartedAt = Date.now()
-      const ok = await this.runStep(entry, prompt)
+      const ok = await this.runStep(entry, prompt, this.approvalMode, step.title)
       if (entry.stopped) break
 
       const stepDurationMs = Date.now() - entry.stepStartedAt
@@ -483,7 +492,12 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
    * Returns true on success, false on error.
    * The Promise stays pending during permission/question pauses.
    */
-  private runStep(entry: RunningAgent, prompt: string): Promise<boolean> {
+  private runStep(
+    entry: RunningAgent,
+    prompt: string,
+    approvalMode?: ApprovalMode,
+    stepTitle?: string
+  ): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       const { agentId } = entry
       const agent = this.agentManager.getAgent(agentId)
@@ -594,7 +608,10 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
           prompt,
           cwd: agent.worktree.path,
           sessionId: entry.sdkSessionId ?? undefined,
-          settingSources: ['user', 'project', 'local']
+          settingSources: ['user', 'project', 'local'],
+          approvalMode,
+          worktreePath: agent.worktree.path,
+          currentStepTitle: stepTitle
         })
         .catch((err) => {
           if (!entry.stopped) {

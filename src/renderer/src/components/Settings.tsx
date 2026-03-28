@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type {
   AppConfig,
+  ApprovalMode,
   ValidationResult,
   RunbookParserType,
   SingleListRole
@@ -434,6 +435,20 @@ function Settings({
               onChange={(e) => update('claudeCliPath', e.target.value)}
               placeholder="Leave empty to use PATH"
             />
+          </SettingsField>
+        </section>
+
+        <section className="settings__section">
+          <h2 className="settings__section-title">Permissions</h2>
+          <SettingsField label="Approval Mode">
+            <select
+              value={config.approvalMode ?? 'never'}
+              onChange={(e) => update('approvalMode', e.target.value as ApprovalMode)}
+            >
+              <option value="never">Always ask (manual review)</option>
+              <option value="smart">Smart (AI-evaluated)</option>
+              <option value="always">Auto-approve all</option>
+            </select>
           </SettingsField>
         </section>
 

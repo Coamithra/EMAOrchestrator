@@ -1,3 +1,5 @@
+import type { ApprovalMode } from './config'
+
 /** State of a CliDriver instance. */
 export type CliDriverState =
   | 'idle'
@@ -21,6 +23,12 @@ export interface CliSessionOptions {
   maxTurns?: number
   /** Pass a previous session ID to resume a conversation. */
   sessionId?: string
+  /** Permission approval mode: 'always' auto-approves, 'smart' uses LLM evaluation, 'never' asks user. */
+  approvalMode?: ApprovalMode
+  /** Worktree path — used by smart approval to determine in-bounds operations. */
+  worktreePath?: string
+  /** Current runbook step title — used by smart approval for intent context. */
+  currentStepTitle?: string
 }
 
 /** Emitted when the SDK's canUseTool callback fires. */

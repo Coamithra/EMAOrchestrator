@@ -22,6 +22,7 @@ function getClaudePath(): string | undefined {
   return resolvedClaudePath || undefined
 }
 import { TypedEventEmitter } from './typed-emitter'
+import { evaluatePermission } from './smart-approval-service'
 import type {
   CliDriverState,
   CliDriverEvents,
@@ -119,7 +120,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
         cwd: options.cwd,
         allowedTools: options.allowedTools,
         settingSources: options.settingSources,
-        canUseTool: this.createCanUseToolCallback(),
+        canUseTool: this.createCanUseToolCallback(options),
         abortController: this.abortController,
         resume: options.sessionId,
         model: options.model,
@@ -345,12 +346,45 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     this.emit('assistant:message', parsed)
   }
 
-  private createCanUseToolCallback() {
+  private createCanUseToolCallback(sessionOptions: CliSessionOptions) {
     return async (
       toolName: string,
       input: Record<string, unknown>,
       options: { signal: AbortSignal; toolUseID: string; title?: string; description?: string }
     ): Promise<PermissionResult> => {
+      const mode = sessionOptions.approvalMode ?? 'never'
+      const inputSummary = summarizeToolInput(toolName, input)
+
+      // Auto-approve everything
+      if (mode === 'always') {
+        this.emit('stream:text', {
+          text: `\x1b[2m[auto-approved] ${toolName}: ${inputSummary}\x1b[0m\r\n`
+        })
+        return { behavior: 'allow' }
+      }
+
+      // Smart LLM-based evaluation
+      if (mode === 'smart') {
+        try {
+          const decision = await evaluatePermission({
+            toolName,
+            toolInput: input,
+            worktreePath: sessionOptions.worktreePath,
+            currentStepTitle: sessionOptions.currentStepTitle
+          })
+          if (decision === 'yes') {
+            this.emit('stream:text', {
+              text: `\x1b[32m[smart-approved] ${toolName}: ${inputSummary}\x1b[0m\r\n`
+            })
+            return { behavior: 'allow' }
+          }
+          // 'no' or 'maybe' — fall through to manual approval
+        } catch {
+          // Evaluation error — fall through to manual approval
+        }
+      }
+
+      // Manual approval (existing flow)
       const requestId = randomUUID()
       const deferred = createDeferred<PermissionResult>()
       this.pendingPermissions.set(requestId, deferred)

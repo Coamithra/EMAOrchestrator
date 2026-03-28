@@ -1,3 +1,5 @@
+export type ApprovalMode = 'always' | 'never' | 'smart'
+
 export type RunbookParserType = 'regex' | 'smart'
 
 /** Role that a Trello list can be assigned in the orchestrator. */
@@ -23,6 +25,7 @@ export interface AppConfig {
   claudeCliPath: string
   maxConcurrentAgents: number
   stuckAgentTimeoutMinutes: number
+  approvalMode: ApprovalMode
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -41,7 +44,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   claudeCliPath: '',
   maxConcurrentAgents: 3,
-  stuckAgentTimeoutMinutes: 10
+  stuckAgentTimeoutMinutes: 10,
+  approvalMode: 'never'
 }
 
 /**

@@ -41,6 +41,7 @@ Central controller pattern: orchestrator parses the runbook into discrete steps,
 Wraps the Agent SDK's `query()` into an EventEmitter-based service. One `CliDriver` instance per agent session. Key design:
 
 - **Permission pause/resume:** `canUseTool` callback creates a deferred Promise that blocks the SDK generator until `respondToPermission()` is called. This bridges the async callback to the Electron IPC/UI flow. The orchestration loop passes `settingSources: ['user', 'project', 'local']` so the SDK loads permission rules from `~/.claude/settings.json`, `.claude/settings.json`, and `.claude/settings.local.json` — tools already allowed by those settings are auto-approved without hitting the UI dialog. Including `'project'` also loads CLAUDE.md project instructions into agent sessions.
+- **Smart auto-approval:** The `canUseTool` callback respects `CliSessionOptions.approvalMode`: `'always'` auto-approves all requests, `'smart'` calls the smart approval evaluator (LLM-based) and auto-approves on `'yes'` (falls through to manual on `'no'`/`'maybe'`/error), `'never'` (default) always shows the UI dialog. Auto-approved decisions emit styled `stream:text` messages for terminal visibility.
 - **AskUserQuestion:** Detected as `tool_use` blocks with `name === 'AskUserQuestion'` in `SDKAssistantMessage`. Response sent via `query.streamInput()`.
 - **Session resumption:** Pass a previous `sessionId` to `CliSessionOptions` to resume a conversation.
 - **Streaming output:** `includePartialMessages: true` is required in the SDK query options to receive `stream_event` messages (typed as `SDKPartialAssistantMessage`). Without it, only full `assistant` messages are yielded and the terminal stays blank.
@@ -84,6 +85,14 @@ AI-powered alternative to the regex runbook parser. Uses the Agent SDK's `query(
 - **JSON extraction:** Handles both raw JSON and markdown-fenced JSON responses.
 - **Validation:** Normalizes `phase` and `index` fields on each step to match parent phase. Throws on missing required fields or empty phases/steps.
 - **Fallback:** The integration in `ipc-handlers.ts` catches errors and falls back to the regex parser if the smart parser fails.
+
+### Smart Approval Service (`src/main/smart-approval-service.ts`)
+
+LLM-powered permission evaluator. Uses the Agent SDK's `query()` (same pattern as the smart runbook parser) with `maxTurns: 1`, no tools, and a safety-focused system prompt.
+
+- **`evaluatePermission(ctx)`** — Takes tool name, input, worktree path, and current step title. Returns `'yes'` (safe), `'no'` (unsafe), or `'maybe'` (uncertain). 15-second timeout. Returns `'maybe'` on any error (safe fallback to manual review).
+- **System prompt:** Rules covering read-only ops (safe), in-worktree edits (safe), build/test commands (safe), destructive ops (unsafe), out-of-bounds writes (unsafe).
+- **Integration:** Called by `CliDriver.createCanUseToolCallback()` when `approvalMode === 'smart'`. Only invoked for tools that the SDK's `settingSources` didn't already auto-approve.
 
 ### Runbook Cache (`src/main/runbook-cache.ts`)
 
@@ -308,6 +317,7 @@ App config stored at `app.getPath('userData')/config.json`. Config service in `s
 - **`trelloBoardId`** — The Settings UI accepts either a raw board ID or a full Trello URL (`https://trello.com/b/<id>/...`). The `extractBoardId()` utility in `src/shared/config.ts` extracts the ID from URLs on input.
 - **`trelloListIds`** — `{ backlog: string[], inProgress: string, done: string }` storing Trello list **IDs** directly. `backlog` is an array (multiple lists can serve as card sources). Assigned via the Settings UI: lists are auto-fetched on open, roles assigned via radio buttons. Replaces the old `trelloListNames` text fields — no more runtime name→ID resolution.
 - **`runbookParser`** (`'regex' | 'smart'`, default `'regex'`) — Which parser to use for CONTRIBUTING.md. `regex` is the original line-scanner (fast, offline, free). `smart` sends the markdown to Claude via the Agent SDK for AI-powered parsing — handles varied markdown structures and filters out non-workflow sections (reference tables, appendices). Configurable in Settings under the Repository section.
+- **`approvalMode`** (`'always' | 'never' | 'smart'`, default `'never'`) — How tool permission requests are handled. `always` auto-approves every request (no UI dialog). `never` always shows the permission dialog. `smart` sends the request to an LLM evaluator — auto-approves on `'yes'`, falls through to the dialog on `'no'`/`'maybe'`. Stored as an instance field on `OrchestrationLoop`, live-updated on config save via `setApprovalMode()`. Configurable in Settings under the Permissions section.
 
 ## Worktree Layout
 
