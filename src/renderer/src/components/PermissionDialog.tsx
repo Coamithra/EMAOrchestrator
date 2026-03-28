@@ -20,6 +20,10 @@ function PermissionDialog({ request, onRespond }: PermissionDialogProps): React.
     onRespond({ requestId: request.requestId, behavior: 'allow' })
   }, [request.requestId, onRespond])
 
+  const handleAllowAndRemember = useCallback(() => {
+    onRespond({ requestId: request.requestId, behavior: 'allow', rememberChoice: true })
+  }, [request.requestId, onRespond])
+
   const handleDeny = useCallback(() => {
     onRespond({ requestId: request.requestId, behavior: 'deny' })
   }, [request.requestId, onRespond])
@@ -64,6 +68,12 @@ function PermissionDialog({ request, onRespond }: PermissionDialogProps): React.
             onClick={handleDeny}
           >
             Deny
+          </button>
+          <button
+            className="interaction-dialog__btn permission-dialog__btn--remember"
+            onClick={handleAllowAndRemember}
+          >
+            Always Allow
           </button>
           <button
             className="interaction-dialog__btn interaction-dialog__btn--primary"

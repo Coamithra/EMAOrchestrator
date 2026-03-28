@@ -4,6 +4,7 @@ import { generateStepPrompt } from './prompt-generator'
 import { TypedEventEmitter } from './typed-emitter'
 import { moveCard, addComment } from './trello-service'
 import { loadConfig } from './config-service'
+import { generateToolPattern, addAllowedToolPattern } from './permission-settings-service'
 import { appendLogEntry } from './logging-service'
 import { createTrackerDoc, checkOffStep, removeTrackerDoc } from './tracker-doc-service'
 import type { AgentManager } from './agent-manager'
@@ -120,6 +121,19 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
   respondToPermission(agentId: string, response: PermissionResponse): void {
     const entry = this.running.get(agentId)
     if (!entry?.driver) return // agent was stopped or has no active session
+
+    // "Allow & Remember": persist the tool pattern to settings.local.json so the SDK
+    // auto-approves matching calls in future sessions. Fire-and-forget.
+    if (response.behavior === 'allow' && response.rememberChoice) {
+      const agent = this.agentManager.getAgent(agentId)
+      const req = agent?.pendingHumanInteraction?.permissionRequest
+      if (req) {
+        const pattern = generateToolPattern(req.toolName, req.toolInput)
+        loadConfig()
+          .then((config) => addAllowedToolPattern(config?.targetRepoPath ?? '', pattern))
+          .catch((err) => console.error('Failed to persist permission pattern:', err))
+      }
+    }
 
     entry.driver.respondToPermission(response)
     entry.lastActivityAt = Date.now()

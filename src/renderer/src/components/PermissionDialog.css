@@ -53,3 +53,8 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+.permission-dialog__btn--remember {
+  background: #d97706;
+  color: #fff;
+}

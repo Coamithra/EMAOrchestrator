@@ -94,6 +94,14 @@ LLM-powered permission evaluator. Uses the Agent SDK's `query()` (same pattern a
 - **System prompt:** Rules covering read-only ops (safe), in-worktree edits (safe), build/test commands (safe), destructive ops (unsafe), out-of-bounds writes (unsafe).
 - **Integration:** Called by `CliDriver.createCanUseToolCallback()` when `approvalMode === 'smart'`. Only invoked for tools that the SDK's `settingSources` didn't already auto-approve.
 
+### Permission Settings Service (`src/main/permission-settings-service.ts`)
+
+Persists tool permission patterns to `.claude/settings.local.json` in the target repo. Stateless exported functions (same pattern as config-service). Enables the "Always Allow" button in the PermissionDialog — writes a pattern so the SDK auto-approves matching tool calls in future sessions.
+
+- **`generateToolPattern(toolName, toolInput)`** — Converts a permission request into a Claude CLI-compatible pattern string. Non-Bash tools return the tool name (e.g., `"Write"`). Bash tools extract a command prefix (max 2 words) and return `"Bash(prefix:*)"` (e.g., `"Bash(git add:*)"`, `"Bash(npm run:*)"`, `"Bash(ls:*)"`)
+- **`addAllowedToolPattern(repoPath, pattern)`** — Reads `<repoPath>/.claude/settings.local.json`, adds the pattern to `permissions.allow` (creates file/dir if needed), writes back. No-op if the pattern already exists or repoPath is empty. Fire-and-forget safe.
+- **Integration:** Called from `OrchestrationLoop.respondToPermission()` when `response.rememberChoice === true`. The write is fire-and-forget — it never blocks the permission response flow.
+
 ### Runbook Cache (`src/main/runbook-cache.ts`)
 
 Content-hash cache for parsed runbooks. Stateless exported functions (same pattern as config-service). Stored at `app.getPath('userData')/runbook-cache/`.
@@ -233,7 +241,7 @@ Main panel for viewing a selected agent's state and output. Composes two sub-com
   - **Step banners:** The orchestration loop emits ANSI-styled `stream:text` banners (bold magenta) before each step prompt showing phase/step position and title.
   - **Tool activity events** (`tool:activity`) are emitted but intentionally not rendered to avoid noise.
 - **`StepProgress`** (`src/renderer/src/components/StepProgress.tsx`) — Collapsible phase/step progress indicator. Shows each runbook phase with expand/collapse, and each step with status icons (pending/running/done) and completion summaries. Current active phase auto-expands. Derives state from `AgentStateSnapshot` + `StepCompletionRecord[]` + the agent's `Runbook`.
-- **`PermissionDialog`** (`src/renderer/src/components/PermissionDialog.tsx`) — Modal overlay for permission requests. Shows tool name, description, and tool input as formatted JSON. Allow/Deny buttons call `respondToOrchestrationPermission()` via IPC. Non-dismissable — cannot be closed by clicking outside or pressing Escape (prevents accidental denial that strands the agent).
+- **`PermissionDialog`** (`src/renderer/src/components/PermissionDialog.tsx`) — Modal overlay for permission requests. Shows tool name, description, and tool input as formatted JSON. Three action buttons: Deny, Always Allow (persists pattern to `settings.local.json` via the permission-settings-service so the SDK auto-approves matching calls in future sessions), and Allow. Non-dismissable — cannot be closed by clicking outside or pressing Escape (prevents accidental denial that strands the agent).
 - **`QuestionDialog`** (`src/renderer/src/components/QuestionDialog.tsx`) — Modal overlay for `AskUserQuestion` tool calls. Shows the question text and a text input. Submit calls `respondToOrchestrationQuestion()` via IPC. Enter key submits (Shift+Enter for newline). Non-dismissable like PermissionDialog.
 - **Permission/question event tracking:** `AgentDetailPanel` subscribes to `cli:event` (filtered by `sessionId === 'orchestration-<agentId>'`) to receive `PermissionRequest` and `UserQuestionRequest` data in real-time. Dialogs are also seeded from `agent.pendingHumanInteraction` on mount so they appear immediately when switching to an agent already waiting for input. Dialogs are cleared when the agent exits `waiting_for_human` state or on agent switch. Dialogs are **gated on `isRunning`** — they only render when the agent has an active CLI session that can receive responses. Non-running agents in `waiting_for_human` show the Resume button instead.
 - **Header:** Card name, phase/step label, "waiting for input" badge when `pendingHumanInteraction` is set, Resume button (when agent is not running and not done), and Stop button (when running).

@@ -47,6 +47,9 @@ export interface PermissionResponse {
   behavior: 'allow' | 'deny'
   message?: string
   updatedInput?: Record<string, unknown>
+  /** When true, persist this allow decision to .claude/settings.local.json so the SDK
+   *  auto-approves matching tool calls in future sessions. */
+  rememberChoice?: boolean
 }
 
 /** Emitted when Claude calls the AskUserQuestion tool. */
