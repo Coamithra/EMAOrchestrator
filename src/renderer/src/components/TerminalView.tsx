@@ -191,7 +191,14 @@ function TerminalView({ agentId }: TerminalViewProps): React.JSX.Element {
 
       switch (event.type) {
         case 'stream:text':
-          bufferText(event.data.text)
+          // Text already containing ANSI escapes (e.g., step banners) bypasses
+          // the markdown converter to avoid conflicting formatting.
+          if (event.data.text.includes('\x1b[')) {
+            flushBuffer()
+            terminal.write(event.data.text)
+          } else {
+            bufferText(event.data.text)
+          }
           break
 
         case 'tool:start':
