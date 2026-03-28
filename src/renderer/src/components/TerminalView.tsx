@@ -93,6 +93,11 @@ function markdownToAnsi(text: string): string {
 // ---------------------------------------------------------------------------
 
 function formatToolStart(toolName: string, inputSummary: string): string {
+  // Bash commands render as a green shell prompt: $ command
+  if (toolName.toLowerCase() === 'bash') {
+    const cmd = inputSummary || 'bash'
+    return `\r\n${ANSI.green}${ANSI.bold}$ ${ANSI.boldOff}${cmd}${ANSI.fgDefault}\r\n`
+  }
   const summary = inputSummary ? ` ${ANSI.dim}${inputSummary}${ANSI.dimOff}` : ''
   return `\r\n${ANSI.cyan}${ANSI.bold}> ${toolName}${ANSI.boldOff}${ANSI.fgDefault}${summary}\r\n`
 }
