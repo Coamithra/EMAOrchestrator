@@ -101,7 +101,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     entry.driver?.abort()
     this.stopStuckWatchdog(entry)
     this.running.delete(agentId)
-    this.agentManager.setSessionId(agentId, null)
+    // Preserve session ID so resume can restore conversation context.
+    // Only clear on completion/destruction, not on stop.
     this.agentManager.setPendingHumanInteraction(agentId, null)
     this.log(agentId, { event: 'agent_stopped' })
     this.emit('agent:stopped', agentId)
@@ -190,10 +191,12 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
   /** Actually launch an agent's orchestration loop (no concurrency check). */
   private launchAgent(agentId: string): void {
+    // Seed session ID from the agent snapshot so resume restores conversation context
+    const existingAgent = this.agentManager.getAgent(agentId)
     const entry: RunningAgent = {
       agentId,
       driver: null,
-      sdkSessionId: null,
+      sdkSessionId: existingAgent?.sessionId ?? null,
       lastAssistantText: '',
       stopped: false,
       lastActivityAt: Date.now(),
@@ -214,7 +217,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         this.stopStuckWatchdog(entry)
         // Ensure the running slot is always freed, even on unexpected throws
         this.running.delete(agentId)
-        this.agentManager.setSessionId(agentId, null)
+        // Don't clear session ID here — preserve it for resume.
+        // It's cleared in runAgentLoop only on successful completion (done state).
         this.tryDequeue()
       })
   }
@@ -418,7 +422,10 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     // unexpected throws — running.delete/tryDequeue are idempotent, so the
     // duplicate call is harmless.
     this.running.delete(agentId)
-    this.agentManager.setSessionId(agentId, null)
+    // Only clear session ID on completion — preserve it for stop/error resume
+    if (sm.getState() === 'done') {
+      this.agentManager.setSessionId(agentId, null)
+    }
     this.tryDequeue()
   }
 
