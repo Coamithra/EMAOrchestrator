@@ -10,6 +10,7 @@ export interface AppConfig {
   targetRepoPath: string
   contributingMdPath: string
   worktreeBasePath: string
+  defaultBranch: string
   runbookParser: RunbookParserType
   trelloApiKey: string
   trelloApiToken: string
@@ -28,6 +29,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   targetRepoPath: '',
   contributingMdPath: 'CONTRIBUTING.md',
   worktreeBasePath: '',
+  defaultBranch: '',
   runbookParser: 'regex',
   trelloApiKey: '',
   trelloApiToken: '',

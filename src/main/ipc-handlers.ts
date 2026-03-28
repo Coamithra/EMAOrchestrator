@@ -5,7 +5,8 @@ import {
   createWorktree,
   listWorktrees,
   removeWorktree,
-  cleanupOrphanedWorktrees
+  cleanupOrphanedWorktrees,
+  listRemoteBranches
 } from './worktree-manager'
 import { removePersistedAgent } from './agent-persistence-service'
 import { parseRunbookContent } from './runbook-parser'
@@ -200,6 +201,10 @@ export function registerIpcHandlers(
     return await cleanupOrphanedWorktrees(repoPath, knownPaths)
   })
 
+  ipcMain.handle(IpcChannels.WORKTREE_LIST_BRANCHES, async (_event, repoPath: string) => {
+    return await listRemoteBranches(repoPath)
+  })
+
   // ---------------------------------------------------------------------------
   // Agent Persistence
   // ---------------------------------------------------------------------------
@@ -243,7 +248,8 @@ export function registerIpcHandlers(
       card,
       runbook,
       config.targetRepoPath,
-      config.worktreeBasePath || undefined
+      config.worktreeBasePath || undefined,
+      config.defaultBranch || undefined
     )
   })
 

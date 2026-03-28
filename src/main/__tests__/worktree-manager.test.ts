@@ -122,6 +122,8 @@ describe('createWorktree', () => {
     mockAccess.mockRejectedValueOnce(new Error('ENOENT'))
     // Branch doesn't exist
     mockExecFile.mockRejectedValueOnce(new Error('not a valid ref'))
+    // getDefaultBranch: symbolic-ref returns 'main'
+    mockExecFile.mockResolvedValueOnce({ stdout: 'main\n', stderr: '' })
     // git worktree add succeeds
     mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
@@ -129,7 +131,7 @@ describe('createWorktree', () => {
 
     expect(result.branch).toBe('feat/new-thing')
     expect(result.isMain).toBe(false)
-    // Second call is the git worktree add with -b flag
+    // Third call is the git worktree add with -b flag
     expect(mockExecFile).toHaveBeenCalledWith(
       'git',
       ['worktree', 'add', expect.stringContaining('feat'), '-b', 'feat/new-thing', 'main'],
@@ -157,6 +159,8 @@ describe('createWorktree', () => {
   it('uses basePath instead of repo parent when provided', async () => {
     mockAccess.mockRejectedValueOnce(new Error('ENOENT'))
     mockExecFile.mockRejectedValueOnce(new Error('not a valid ref'))
+    // getDefaultBranch: symbolic-ref returns 'main'
+    mockExecFile.mockResolvedValueOnce({ stdout: 'main\n', stderr: '' })
     mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     const result = await createWorktree('C:/Proj/main', 'feat/custom', 'D:/worktrees')

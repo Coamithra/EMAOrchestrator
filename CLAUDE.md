@@ -66,7 +66,8 @@ Stateless exported functions for Trello REST API operations. Uses native `fetch(
 
 Wraps `git worktree` commands into an async service. Stateless exported functions (same pattern as config-service). One worktree per agent session, created as siblings to the main repo directory.
 
-- **`createWorktree(repoPath, branch, basePath?)`** — Creates worktree + new branch from the repo's default branch (auto-detected via `git symbolic-ref`, falls back to `main`). Reuses branch if it already exists. Optional `basePath` overrides the default sibling-to-repo location.
+- **`createWorktree(repoPath, branch, basePath?, defaultBranch?)`** — Creates worktree + new branch from the specified or auto-detected default branch (`git symbolic-ref`, falls back to `main`). Reuses branch if it already exists. Optional `basePath` overrides the default sibling-to-repo location. Optional `defaultBranch` overrides auto-detection.
+- **`listRemoteBranches(repoPath)`** — Lists remote branch names from origin via `git ls-remote --heads origin`. Used by the Settings UI to populate the default branch dropdown.
 - **`listWorktrees(repoPath)`** — Parses `git worktree list --porcelain` into typed `WorktreeInfo[]`.
 - **`removeWorktree(repoPath, worktree)`** — Removes worktree by `WorktreeInfo`, prunes, deletes branch.
 - **`getOrphanedWorktrees(repoPath)`** — Returns all non-main worktrees (orphans on startup).
@@ -299,6 +300,7 @@ Named `namespace:action` (e.g., `config:load`, `cli:start`, `worktree:list`). Ch
 
 App config stored at `app.getPath('userData')/config.json`. Config service in `src/main/config-service.ts`. Schema defined in `src/shared/config.ts`. Notable fields:
 
+- **`defaultBranch`** (string, optional) — Explicit base branch for worktree creation. When empty (default), auto-detected via `git symbolic-ref --short HEAD` (falls back to `main`). Configurable in Settings via a dropdown that fetches remote branches from origin.
 - **`worktreeBasePath`** (string, optional) — Custom base directory for agent worktrees. When empty (default), worktrees are created as siblings to the repo directory.
 - **`trelloBoardId`** — The Settings UI accepts either a raw board ID or a full Trello URL (`https://trello.com/b/<id>/...`). The `extractBoardId()` utility in `src/shared/config.ts` extracts the ID from URLs on input.
 - **`trelloListIds`** — `{ backlog: string[], inProgress: string, done: string }` storing Trello list **IDs** directly. `backlog` is an array (multiple lists can serve as card sources). Assigned via the Settings UI: lists are auto-fetched on open, roles assigned via radio buttons. Replaces the old `trelloListNames` text fields — no more runtime name→ID resolution.

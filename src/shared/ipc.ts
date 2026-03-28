@@ -50,6 +50,7 @@ export const IpcChannels = {
   WORKTREE_LIST: 'worktree:list',
   WORKTREE_REMOVE: 'worktree:remove',
   WORKTREE_CLEANUP_ORPHANS: 'worktree:cleanupOrphans',
+  WORKTREE_LIST_BRANCHES: 'worktree:listBranches',
 
   // Agent persistence
   AGENT_LIST: 'agent:list',
@@ -153,6 +154,7 @@ export interface AgentAPI {
   listWorktrees(repoPath: string): Promise<WorktreeInfo[]>
   removeWorktree(repoPath: string, worktree: WorktreeInfo): Promise<void>
   cleanupOrphanedWorktrees(repoPath: string): Promise<WorktreeInfo[]>
+  listRemoteBranches(repoPath: string): Promise<string[]>
 }
 
 /** Agent persistence API exposed to the renderer. */

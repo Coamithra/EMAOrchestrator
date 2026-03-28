@@ -68,7 +68,8 @@ export async function listWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
 export async function createWorktree(
   repoPath: string,
   branch: string,
-  basePath?: string
+  basePath?: string,
+  defaultBranch?: string
 ): Promise<WorktreeInfo> {
   const parentDir = basePath || dirname(repoPath)
   const worktreePath = resolve(join(parentDir, branch))
@@ -94,8 +95,8 @@ export async function createWorktree(
     })
   } else {
     // Create new branch from the repo's default branch
-    const defaultBranch = await getDefaultBranch(repoPath)
-    await execFileAsync('git', ['worktree', 'add', worktreePath, '-b', branch, defaultBranch], {
+    const baseBranch = defaultBranch || (await getDefaultBranch(repoPath))
+    await execFileAsync('git', ['worktree', 'add', worktreePath, '-b', branch, baseBranch], {
       cwd: repoPath
     })
   }
@@ -188,6 +189,25 @@ async function getDefaultBranch(repoPath: string): Promise<string> {
   } catch {
     return 'main'
   }
+}
+
+/**
+ * List remote branch names from the origin remote.
+ * Returns short names (e.g. ['main', 'master', 'develop']).
+ */
+export async function listRemoteBranches(repoPath: string): Promise<string[]> {
+  const { stdout } = await execFileAsync('git', ['ls-remote', '--heads', 'origin'], {
+    cwd: repoPath
+  })
+  return stdout
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const ref = line.split('\t')[1] ?? ''
+      return ref.replace('refs/heads/', '')
+    })
+    .filter(Boolean)
 }
 
 async function doesBranchExist(repoPath: string, branch: string): Promise<boolean> {

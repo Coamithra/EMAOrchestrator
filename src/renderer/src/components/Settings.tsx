@@ -37,6 +37,9 @@ function Settings({
   const [boardLists, setBoardLists] = useState<TrelloList[]>([])
   const [fetchingLists, setFetchingLists] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
+  const [remoteBranches, setRemoteBranches] = useState<string[]>([])
+  const [fetchingBranches, setFetchingBranches] = useState(false)
+  const [branchError, setBranchError] = useState<string | null>(null)
 
   const didAutoFetch = useRef(false)
   useEffect(() => {
@@ -162,6 +165,22 @@ function Settings({
     if (path) update(field, path)
   }
 
+  async function handleFetchBranches(): Promise<void> {
+    setFetchingBranches(true)
+    setBranchError(null)
+    try {
+      const branches = await window.api.listRemoteBranches(config.targetRepoPath)
+      if (branches.length === 0) {
+        setBranchError('No remote branches found')
+      }
+      setRemoteBranches(branches)
+    } catch {
+      setBranchError('Failed to fetch branches — check repo path')
+    } finally {
+      setFetchingBranches(false)
+    }
+  }
+
   async function handleValidate(): Promise<void> {
     setSaving(true)
     try {
@@ -242,6 +261,35 @@ function Settings({
               onChange={(e) => update('worktreeBasePath', e.target.value)}
               placeholder="Leave empty to use repo parent directory"
             />
+          </SettingsField>
+
+          <SettingsField label="Default Branch">
+            <div className="settings__branch-row">
+              <select
+                value={config.defaultBranch}
+                onChange={(e) => update('defaultBranch', e.target.value)}
+              >
+                <option value="">Auto-detect</option>
+                {remoteBranches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+                {config.defaultBranch &&
+                  !remoteBranches.includes(config.defaultBranch) && (
+                    <option value={config.defaultBranch}>{config.defaultBranch}</option>
+                  )}
+              </select>
+              <button
+                type="button"
+                className="settings__btn settings__btn--small"
+                onClick={handleFetchBranches}
+                disabled={!config.targetRepoPath || fetchingBranches}
+              >
+                {fetchingBranches ? 'Fetching...' : 'Fetch Branches'}
+              </button>
+            </div>
+            {branchError && <div className="settings__list-error">{branchError}</div>}
           </SettingsField>
 
           <SettingsField label="Runbook Parser">

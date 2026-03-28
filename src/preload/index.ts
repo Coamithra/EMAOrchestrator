@@ -42,6 +42,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.WORKTREE_REMOVE, repoPath, worktree),
   cleanupOrphanedWorktrees: (repoPath: string): Promise<unknown> =>
     ipcRenderer.invoke(IpcChannels.WORKTREE_CLEANUP_ORPHANS, repoPath),
+  listRemoteBranches: (repoPath: string): Promise<string[]> =>
+    ipcRenderer.invoke(IpcChannels.WORKTREE_LIST_BRANCHES, repoPath),
 
   // Agent creation
   createAgent: (card: { id: string; name: string; description: string }): Promise<string> =>

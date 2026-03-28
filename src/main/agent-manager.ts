@@ -48,10 +48,11 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     card: CardInfo,
     runbook: Runbook,
     repoPath: string,
-    worktreeBasePath?: string
+    worktreeBasePath?: string,
+    defaultBranch?: string
   ): Promise<string> {
     const branch = branchNameFromCard(card.name)
-    const worktree = await createWorktree(repoPath, branch, worktreeBasePath)
+    const worktree = await createWorktree(repoPath, branch, worktreeBasePath, defaultBranch)
 
     let stateMachine: AgentStateMachine
     try {
