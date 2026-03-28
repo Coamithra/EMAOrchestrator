@@ -118,6 +118,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
       options: {
         cwd: options.cwd,
         allowedTools: options.allowedTools,
+        settingSources: options.settingSources,
         canUseTool: this.createCanUseToolCallback(),
         abortController: this.abortController,
         resume: options.sessionId,

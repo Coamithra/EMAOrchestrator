@@ -13,6 +13,9 @@ export interface CliSessionOptions {
   prompt: string
   cwd: string
   allowedTools?: string[]
+  /** Which filesystem settings files to load for permission rules.
+   *  When omitted, the SDK loads no settings (isolation mode). */
+  settingSources?: Array<'user' | 'project' | 'local'>
   systemPrompt?: string
   model?: string
   maxTurns?: number

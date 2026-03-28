@@ -593,7 +593,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         .startSession({
           prompt,
           cwd: agent.worktree.path,
-          sessionId: entry.sdkSessionId ?? undefined
+          sessionId: entry.sdkSessionId ?? undefined,
+          settingSources: ['user', 'project', 'local']
         })
         .catch((err) => {
           if (!entry.stopped) {

@@ -40,7 +40,7 @@ Central controller pattern: orchestrator parses the runbook into discrete steps,
 
 Wraps the Agent SDK's `query()` into an EventEmitter-based service. One `CliDriver` instance per agent session. Key design:
 
-- **Permission pause/resume:** `canUseTool` callback creates a deferred Promise that blocks the SDK generator until `respondToPermission()` is called. This bridges the async callback to the Electron IPC/UI flow.
+- **Permission pause/resume:** `canUseTool` callback creates a deferred Promise that blocks the SDK generator until `respondToPermission()` is called. This bridges the async callback to the Electron IPC/UI flow. The orchestration loop passes `settingSources: ['user', 'project', 'local']` so the SDK loads permission rules from `~/.claude/settings.json`, `.claude/settings.json`, and `.claude/settings.local.json` — tools already allowed by those settings are auto-approved without hitting the UI dialog.
 - **AskUserQuestion:** Detected as `tool_use` blocks with `name === 'AskUserQuestion'` in `SDKAssistantMessage`. Response sent via `query.streamInput()`.
 - **Session resumption:** Pass a previous `sessionId` to `CliSessionOptions` to resume a conversation.
 - **Streaming output:** `includePartialMessages: true` is required in the SDK query options to receive `stream_event` messages (typed as `SDKPartialAssistantMessage`). Without it, only full `assistant` messages are yielded and the terminal stays blank.
