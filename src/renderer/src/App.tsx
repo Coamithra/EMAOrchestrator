@@ -7,6 +7,7 @@ import Settings from './components/Settings'
 import MainLayout from './components/MainLayout'
 import NewAgentDialog from './components/NewAgentDialog'
 import RunbookView from './components/RunbookView'
+import { initTerminalBuffer, clearBuffer } from './services/terminal-buffer-service'
 
 type View = 'loading' | 'settings' | 'main' | 'runbook'
 
@@ -16,6 +17,12 @@ function App(): React.JSX.Element {
   const [agents, setAgents] = useState<AgentSnapshot[]>([])
   const [runningAgentIds, setRunningAgentIds] = useState<Set<string>>(new Set())
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false)
+
+  // Initialize terminal output buffer early so it captures events for all agents,
+  // even before any TerminalView is mounted. Runs once on app startup.
+  useEffect(() => {
+    initTerminalBuffer()
+  }, [])
 
   useEffect(() => {
     window.api
@@ -89,6 +96,7 @@ function App(): React.JSX.Element {
         }
 
         case 'agent:destroyed':
+          clearBuffer(event.data.agentId)
           setAgents((prev) => prev.filter((a) => a.id !== event.data.agentId))
           break
 
