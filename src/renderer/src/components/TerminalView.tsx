@@ -166,6 +166,24 @@ function TerminalView({ agentId }: TerminalViewProps): React.JSX.Element {
     })
     observer.observe(container)
 
+    // Clipboard: Ctrl+C copies selection (safe — this is a display-only terminal)
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.ctrlKey && event.key === 'c' && terminal.hasSelection()) {
+        navigator.clipboard.writeText(terminal.getSelection())
+        return false
+      }
+      return true
+    })
+
+    // Right-click copies selection to clipboard
+    container.addEventListener('contextmenu', (e) => {
+      const selection = terminal.getSelection()
+      if (selection) {
+        e.preventDefault()
+        navigator.clipboard.writeText(selection)
+      }
+    })
+
     // Markdown buffer: accumulate text deltas and flush with markdown conversion
     let mdBuffer = ''
     let flushTimer: ReturnType<typeof setTimeout> | null = null
