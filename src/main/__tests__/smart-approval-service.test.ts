@@ -95,7 +95,7 @@ beforeEach(() => {
 // ===========================================================================
 
 describe('SAFE_TOOLS fast-path', () => {
-  const safeTools = ['Read', 'Glob', 'Grep', 'LS', 'LSP', 'TaskGet', 'TaskList', 'TodoRead']
+  const safeTools = ['Read', 'Glob', 'Grep', 'Ls', 'Lsp', 'TaskGet', 'TaskList', 'TodoRead']
 
   it.each(safeTools)('bypasses LLM for known safe tool: %s', async (tool) => {
     const result = await evaluatePermission(toolCtx(tool))
@@ -114,7 +114,6 @@ describe('SAFE_TOOLS fast-path', () => {
   })
 
   it('does NOT bypass LLM for near-miss tool names', async () => {
-    mockLLMResponse('{"decision": "yes"}')
     const nearMisses = ['Reads', 'Grepp', 'Reading', 'Ls2', 'greps', 'lsps']
     for (const tool of nearMisses) {
       vi.clearAllMocks()
@@ -300,15 +299,7 @@ describe('parseDecision — unicode and special characters', () => {
     expect(await evaluatePermission(bashCtx('ls'))).toBe('yes')
   })
 
-  it('parses bare keyword even with BOM prefix (BOM is invisible to regex path)', async () => {
-    // The BOM character doesn't prevent the JSON regex from matching if
-    // the response happens to be wrapped in braces, and for bare keywords
-    // the trim()+toLowerCase() path may still work depending on runtime.
-    // Current behavior: the response goes through the JSON regex first —
-    // no match (no braces), then bare keyword path: trim() does NOT strip
-    // BOM, but the regex path found a match earlier. Actually the BOM
-    // response '\uFEFFyes' has no braces, so it falls to bare keyword.
-    // In practice V8's trim() DOES strip BOM (U+FEFF is Zs category).
+  it('parses bare keyword with BOM prefix (V8 trim strips U+FEFF)', async () => {
     mockLLMResponse('\uFEFFyes')
     expect(await evaluatePermission(bashCtx('ls'))).toBe('yes')
   })
@@ -349,6 +340,46 @@ describe('error handling', () => {
       makeAsyncIterable([{ type: 'system', subtype: 'init', session_id: 'x' }])
     )
     expect(await evaluatePermission(bashCtx('ls'))).toBe('maybe')
+  })
+
+  it('returns maybe when abort controller fires (simulated timeout)', async () => {
+    // Simulate a slow iterator that gets aborted
+    mockQueryIterator.mockReturnValue({
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            // Hang until abort — evaluatePermission has a 15s timeout
+            await new Promise((_, reject) => setTimeout(() => reject(new Error('aborted')), 50))
+            return { value: undefined, done: true }
+          }
+        }
+      }
+    })
+    expect(await evaluatePermission(bashCtx('ls'))).toBe('maybe')
+  })
+
+  it('concatenates text from multiple content blocks in one assistant message', async () => {
+    mockQueryIterator.mockReturnValue(
+      makeAsyncIterable([
+        {
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: '{"deci' },
+              { type: 'text', text: 'sion": "yes"}' }
+            ]
+          }
+        }
+      ])
+    )
+    expect(await evaluatePermission(bashCtx('ls'))).toBe('yes')
+  })
+
+  it('concatenates text across multiple assistant messages', async () => {
+    mockQueryIterator.mockReturnValue(
+      makeAsyncIterable([makeAssistantMessage('{"deci'), makeAssistantMessage('sion": "no"}')])
+    )
+    expect(await evaluatePermission(bashCtx('rm -rf /'))).toBe('no')
   })
 })
 
@@ -396,6 +427,22 @@ describe('prompt construction', () => {
       currentStepTitle: 'test'
     })
     expect((lastQueryArgs as { prompt: string }).prompt).not.toContain('Worktree:')
+  })
+
+  it('omits current step line when not provided', async () => {
+    mockLLMResponse('{"decision": "yes"}')
+    await evaluatePermission({
+      toolName: 'Bash',
+      toolInput: { command: 'ls' },
+      worktreePath: '/project'
+    })
+    expect((lastQueryArgs as { prompt: string }).prompt).not.toContain('Current step:')
+  })
+
+  it('handles empty toolInput object', async () => {
+    mockLLMResponse('{"decision": "yes"}')
+    await evaluatePermission(toolCtx('SomeTool', {}))
+    expect((lastQueryArgs as { prompt: string }).prompt).toContain('Input: {}')
   })
 
   it('serializes adversarial input verbatim (no sanitization — LLM sees raw input)', async () => {
@@ -1113,12 +1160,10 @@ describe('adversarial: publishing and deploying', () => {
 // LAYER 6: CliDriver INTEGRATION (smart approval mode)
 // ===========================================================================
 
-describe('CliDriver integration: approval modes', () => {
-  // These tests verify that the CliDriver correctly routes through the
-  // smart approval service based on the approvalMode option. The actual
-  // CliDriver integration is already tested in cli-driver.test.ts; here
-  // we test the evaluatePermission function's behavior is consistent
-  // with what the driver expects.
+describe('evaluatePermission return contract (values consumed by CliDriver)', () => {
+  // These tests verify that evaluatePermission returns the correct values
+  // for each scenario. The CliDriver integration (how it calls evaluatePermission
+  // and routes on the result) is tested in cli-driver.test.ts.
 
   it('evaluatePermission returns yes for safe tool — driver would auto-approve', async () => {
     // Safe tools never hit the LLM, so the driver can trust instant 'yes'
