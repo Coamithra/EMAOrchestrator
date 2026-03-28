@@ -91,7 +91,7 @@ AI-powered alternative to the regex runbook parser. Uses the Agent SDK's `query(
 LLM-powered permission evaluator. Uses the Agent SDK's `query()` (same pattern as the smart runbook parser) with `maxTurns: 1`, no tools, and a safety-focused system prompt.
 
 - **`evaluatePermission(ctx)`** — Takes tool name, input, worktree path, and current step title. Returns `'yes'` (safe), `'no'` (unsafe), or `'maybe'` (uncertain). 15-second timeout. Returns `'maybe'` on any error (safe fallback to manual review).
-- **System prompt:** Rules covering read-only ops (safe), in-worktree edits (safe), build/test commands (safe), destructive ops (unsafe), out-of-bounds writes (unsafe).
+- **System prompt:** Rules covering read-only ops (safe), in-worktree edits (safe), build/test commands (safe), destructive ops (unsafe), out-of-bounds writes (unsafe), shell redirects (unsafe), special-source overwrites (unsafe), shell obfuscation techniques (unsafe). Includes anti-prompt-injection instruction to ignore embedded comments/instructions.
 - **Integration:** Called by `CliDriver.createCanUseToolCallback()` when `approvalMode === 'smart'`. Only invoked for tools that the SDK's `settingSources` didn't already auto-approve.
 
 ### Permission Settings Service (`src/main/permission-settings-service.ts`)
@@ -306,6 +306,14 @@ Prettier: single quotes, no semicolons, 100-char line width, no trailing commas.
 ### Tests
 
 Tests live in `src/main/__tests__/` using Vitest (no config file — uses defaults). Test files are named `<module>.test.ts`. No vitest config — runs with default settings.
+
+**Integration tests** for the smart approval service call the real LLM (no mocks) to verify Claude correctly identifies dangerous operations. Gated behind `RUN_INTEGRATION` env var — skipped by default during `npx vitest run`.
+
+- `RUN_INTEGRATION=true npx vitest run src/main/__tests__/smart-approval-service.integration.test.ts` — Vitest assertions (pass/fail)
+- `npx tsx src/main/__tests__/integration-run-report.ts` — Standalone runner that generates a detailed Markdown report in `docs/`
+- Test vectors defined in `integration-test-vectors.ts` (shared between both runners)
+- Cost: ~$1.20 per full run, ~7.5 minutes. Each vector = one LLM call.
+- **SAFETY:** These tests NEVER execute commands. They only call `evaluatePermission()` which asks the LLM for a yes/no/maybe text decision.
 
 ### Import Aliases
 
