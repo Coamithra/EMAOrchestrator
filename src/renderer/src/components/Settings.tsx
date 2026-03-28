@@ -449,6 +449,11 @@ function Settings({
               <option value="smart">Smart (AI-evaluated)</option>
               <option value="always">Auto-approve all</option>
             </select>
+            {config.approvalMode === 'always' && (
+              <div className="settings__list-error">
+                Warning: this bypasses all safety checks. Use only in trusted environments.
+              </div>
+            )}
           </SettingsField>
         </section>
 

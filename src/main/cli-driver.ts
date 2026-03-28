@@ -380,7 +380,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
           }
           // 'no' or 'maybe' — fall through to manual approval
         } catch {
-          // Evaluation error — fall through to manual approval
+          // Defense-in-depth: evaluatePermission catches internally, but guard anyway
         }
       }
 

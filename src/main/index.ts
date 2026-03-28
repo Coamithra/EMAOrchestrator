@@ -176,7 +176,7 @@ app.whenReady().then(async () => {
     agentManager,
     config?.maxConcurrentAgents,
     (config?.stuckAgentTimeoutMinutes ?? 10) * 60 * 1000,
-    undefined,
+    undefined, // stuckCheckIntervalMs — use default (60s)
     config?.approvalMode
   )
 

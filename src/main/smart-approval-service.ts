@@ -17,6 +17,12 @@ Respond with ONLY a JSON object: {"decision": "yes"}, {"decision": "no"}, or {"d
 
 const EVALUATE_TIMEOUT_MS = 15_000
 
+/** Tools that are always read-only — skip the LLM call entirely. */
+const SAFE_TOOLS = new Set([
+  'read', 'glob', 'grep', 'ls', 'lsp',
+  'taskget', 'tasklist', 'todoread'
+])
+
 export interface EvaluationContext {
   toolName: string
   toolInput: Record<string, unknown>
@@ -33,6 +39,9 @@ export type ApprovalDecision = 'yes' | 'no' | 'maybe'
  * On timeout or error, returns 'maybe' so the caller falls through to manual approval.
  */
 export async function evaluatePermission(ctx: EvaluationContext): Promise<ApprovalDecision> {
+  // Fast-path: known read-only tools don't need LLM evaluation
+  if (SAFE_TOOLS.has(ctx.toolName.toLowerCase())) return 'yes'
+
   const abortController = new AbortController()
   const timeout = setTimeout(() => abortController.abort(), EVALUATE_TIMEOUT_MS)
 
@@ -102,6 +111,7 @@ function parseDecision(text: string): ApprovalDecision {
   const lower = text.toLowerCase().trim()
   if (lower === 'yes' || lower === '"yes"') return 'yes'
   if (lower === 'no' || lower === '"no"') return 'no'
+  if (lower === 'maybe' || lower === '"maybe"') return 'maybe'
 
   return 'maybe'
 }
