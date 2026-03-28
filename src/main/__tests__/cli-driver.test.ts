@@ -48,6 +48,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 
 // Import after mocking
 import { CliDriver } from '../cli-driver'
+import { query as mockQuery } from '@anthropic-ai/claude-agent-sdk'
 
 // Helper to build SDK messages
 function systemInitMessage(overrides?: Partial<SDKMessage>): SDKMessage {
@@ -209,6 +210,24 @@ describe('CliDriver', () => {
       await driver.startSession({ prompt: 'Hello', cwd: '/test' })
 
       expect(driver.getSessionId()).toBe('test-session-123')
+    })
+
+    it('passes settingSources through to SDK query options', async () => {
+      mockMessages = [systemInitMessage(), resultMessage()]
+
+      await driver.startSession({
+        prompt: 'Hello',
+        cwd: '/test',
+        settingSources: ['user', 'project', 'local']
+      })
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            settingSources: ['user', 'project', 'local']
+          })
+        })
+      )
     })
 
     it('emits session:result on completion', async () => {

@@ -200,6 +200,29 @@ describe('OrchestrationLoop', () => {
       expect(mockStartSession).toHaveBeenCalledTimes(3)
     })
 
+    it('passes settingSources to CliDriver sessions', async () => {
+      const { manager, agentId } = await setupAgent()
+      const loop = new OrchestrationLoop(manager)
+
+      mockSuccessfulSession()
+
+      const completed = new Promise<void>((resolve) => {
+        loop.on('agent:completed', () => resolve())
+      })
+
+      loop.startAgent(agentId)
+      await completed
+
+      // Every startSession call should include settingSources
+      for (const call of mockStartSession.mock.calls) {
+        expect(call[0]).toEqual(
+          expect.objectContaining({
+            settingSources: ['user', 'project', 'local']
+          })
+        )
+      }
+    })
+
     it('transitions from idle through picking_card to first phase', async () => {
       const { manager, agentId } = await setupAgent()
       const loop = new OrchestrationLoop(manager)
