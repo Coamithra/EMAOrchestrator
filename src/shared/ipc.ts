@@ -8,7 +8,10 @@ import type {
   SessionInfo,
   SessionResult,
   StreamTextDelta,
-  AssistantContent
+  AssistantContent,
+  ToolStartEvent,
+  ToolActivityEvent,
+  ToolSummaryEvent
 } from './cli-driver'
 import type { WorktreeInfo } from './worktree'
 import type { AgentSnapshot } from './agent-manager'
@@ -90,6 +93,9 @@ export type CliEvent =
   | { type: 'session:init'; data: SessionInfo }
   | { type: 'stream:text'; data: StreamTextDelta }
   | { type: 'assistant:message'; data: AssistantContent }
+  | { type: 'tool:start'; data: ToolStartEvent }
+  | { type: 'tool:activity'; data: ToolActivityEvent }
+  | { type: 'tool:summary'; data: ToolSummaryEvent }
   | { type: 'permission:request'; data: PermissionRequest }
   | { type: 'user:question'; data: UserQuestionRequest }
   | { type: 'session:result'; data: SessionResult }

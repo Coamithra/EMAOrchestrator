@@ -354,6 +354,9 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         prompt
       })
 
+      // Emit a step banner to the terminal before the prompt is sent
+      this.emitStepBanner(agentId, snapshot, phase.name, step.title)
+
       entry.stepStartedAt = Date.now()
       const ok = await this.runStep(entry, prompt)
       if (entry.stopped) break
@@ -609,6 +612,32 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.emit('agent:errored', agentId, message)
   }
 
+  /** Push an ANSI-styled step banner to the renderer terminal. */
+  private emitStepBanner(
+    agentId: string,
+    snapshot: { phaseIndex: number; totalPhases: number; stepIndex: number },
+    phaseName: string,
+    stepTitle: string
+  ): void {
+    const sessionId = `orchestration-${agentId}`
+    const win = BrowserWindow.getAllWindows()[0]
+    if (!win || win.isDestroyed()) return
+
+    const totalSteps =
+      this.agentManager.getRunbook(agentId)?.phases[snapshot.phaseIndex]?.steps.length ?? '?'
+    const label =
+      `Phase ${snapshot.phaseIndex + 1}/${snapshot.totalPhases}: ${phaseName}` +
+      ` — Step ${snapshot.stepIndex + 1}/${totalSteps}: ${stepTitle}`
+
+    // Bold magenta banner with horizontal rules
+    const banner = `\r\n\x1b[1;35m${'━'.repeat(3)} ${label} ${'━'.repeat(3)}\x1b[0m\r\n\r\n`
+
+    win.webContents.send('cli:event', {
+      sessionId,
+      event: { type: 'stream:text' as const, data: { text: banner } }
+    } satisfies CliEventPayload)
+  }
+
   // ---------------------------------------------------------------------------
   // Stuck-agent watchdog
   // ---------------------------------------------------------------------------
@@ -731,6 +760,15 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     })
     driver.on('stream:text', (delta) => {
       push({ type: 'stream:text', data: delta })
+    })
+    driver.on('tool:start', (event) => {
+      push({ type: 'tool:start', data: event })
+    })
+    driver.on('tool:activity', (event) => {
+      push({ type: 'tool:activity', data: event })
+    })
+    driver.on('tool:summary', (event) => {
+      push({ type: 'tool:summary', data: event })
     })
     driver.on('assistant:message', (content) => {
       push({ type: 'assistant:message', data: content })

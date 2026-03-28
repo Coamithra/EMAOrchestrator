@@ -46,6 +46,7 @@ Wraps the Agent SDK's `query()` into an EventEmitter-based service. One `CliDriv
 - **Streaming output:** `includePartialMessages: true` is required in the SDK query options to receive `stream_event` messages (typed as `SDKPartialAssistantMessage`). Without it, only full `assistant` messages are yielded and the terminal stays blank.
 - **Claude CLI resolution:** The SDK's built-in `cli.js` path resolution can fail in Electron contexts. The driver explicitly resolves the system `claude` binary via `where`/`which` at module load and passes it as `pathToClaudeCodeExecutable`.
 - **Newline handling:** A `\n` is emitted before each `content_block_start` (text type) so successive text segments separated by tool calls don't run together in the terminal.
+- **Tool events:** `tool_progress` SDK messages emit `tool:activity` (tool name + elapsed seconds). `tool_use_summary` SDK messages emit `tool:summary` (summary text). Tool use blocks in `assistant` messages emit `tool:start` (tool name + input summary via `summarizeToolInput()`). These events are forwarded through the IPC `CliEvent` union to the renderer.
 - **Shared types:** `src/shared/cli-driver.ts` defines all event/state types for use across main process and renderer.
 
 ### Trello Service (`src/main/trello-service.ts`)
@@ -212,7 +213,12 @@ Central definition of all IPC channel constants and the renderer API type.
 
 Main panel for viewing a selected agent's state and output. Composes two sub-components:
 
-- **`TerminalView`** (`src/renderer/src/components/TerminalView.tsx`) — xterm.js wrapper that renders streaming CLI output. Subscribes to `cli:event` IPC channel, filtering by session ID `orchestration-<agentId>`. Writes `stream:text` deltas to the terminal. Uses `@xterm/addon-fit` with a ResizeObserver for responsive sizing. Terminal instance is created/disposed per agent ID change.
+- **`TerminalView`** (`src/renderer/src/components/TerminalView.tsx`) — xterm.js wrapper that renders streaming CLI output with rich formatting. Subscribes to `cli:event` IPC channel, filtering by session ID `orchestration-<agentId>`. Uses `@xterm/addon-fit` with a ResizeObserver for responsive sizing. Terminal instance is created/disposed per agent ID change. Key rendering features:
+  - **Markdown-to-ANSI conversion:** A 30ms buffered converter transforms common inline markdown (`**bold**` → ANSI bold, `` `code` `` → cyan, `# heading` → bold yellow) before writing to xterm.js. Buffer delay allows split chunks to accumulate for pattern detection.
+  - **Tool call visualization:** `tool:start` events render as `> ToolName input_summary` (cyan bold tool name, dim input). `tool:summary` events render as indented dim text. The `summarizeToolInput()` function in `cli-driver.ts` produces short human-readable summaries (file paths for Read/Write, commands for Bash, patterns for Grep/Glob).
+  - **Session stats:** `session:result` events render a yellow separator line with cost, turn count, and duration.
+  - **Step banners:** The orchestration loop emits ANSI-styled `stream:text` banners (bold magenta) before each step prompt showing phase/step position and title.
+  - **Tool activity events** (`tool:activity`) are emitted but intentionally not rendered to avoid noise.
 - **`StepProgress`** (`src/renderer/src/components/StepProgress.tsx`) — Collapsible phase/step progress indicator. Shows each runbook phase with expand/collapse, and each step with status icons (pending/running/done) and completion summaries. Current active phase auto-expands. Derives state from `AgentStateSnapshot` + `StepCompletionRecord[]` + the agent's `Runbook`.
 - **`PermissionDialog`** (`src/renderer/src/components/PermissionDialog.tsx`) — Modal overlay for permission requests. Shows tool name, description, and tool input as formatted JSON. Allow/Deny buttons call `respondToOrchestrationPermission()` via IPC. Non-dismissable — cannot be closed by clicking outside or pressing Escape (prevents accidental denial that strands the agent).
 - **`QuestionDialog`** (`src/renderer/src/components/QuestionDialog.tsx`) — Modal overlay for `AskUserQuestion` tool calls. Shows the question text and a text input. Submit calls `respondToOrchestrationQuestion()` via IPC. Enter key submits (Shift+Enter for newline). Non-dismissable like PermissionDialog.

@@ -79,12 +79,32 @@ export interface AssistantContent {
   toolUses: Array<{ toolName: string; input: Record<string, unknown> }>
 }
 
+/** Emitted when a tool call is detected in an assistant message. */
+export interface ToolStartEvent {
+  toolName: string
+  inputSummary: string
+}
+
+/** Emitted periodically while a tool is executing. */
+export interface ToolActivityEvent {
+  toolName: string
+  elapsedSeconds: number
+}
+
+/** Emitted when the SDK provides a tool use summary. */
+export interface ToolSummaryEvent {
+  summary: string
+}
+
 /** Typed event map for the CliDriver. */
 export type CliDriverEvents = {
   'state:changed': (state: CliDriverState, previousState: CliDriverState) => void
   'session:init': (info: SessionInfo) => void
   'stream:text': (delta: StreamTextDelta) => void
   'assistant:message': (content: AssistantContent) => void
+  'tool:start': (event: ToolStartEvent) => void
+  'tool:activity': (event: ToolActivityEvent) => void
+  'tool:summary': (event: ToolSummaryEvent) => void
   'permission:request': (request: PermissionRequest) => void
   'user:question': (request: UserQuestionRequest) => void
   'session:result': (result: SessionResult) => void

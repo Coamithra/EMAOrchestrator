@@ -39,6 +39,18 @@ function wireEvents(sessionId: string, driver: CliDriver): void {
     pushEvent({ sessionId, event: { type: 'stream:text', data: delta } })
   })
 
+  driver.on('tool:start', (event) => {
+    pushEvent({ sessionId, event: { type: 'tool:start', data: event } })
+  })
+
+  driver.on('tool:activity', (event) => {
+    pushEvent({ sessionId, event: { type: 'tool:activity', data: event } })
+  })
+
+  driver.on('tool:summary', (event) => {
+    pushEvent({ sessionId, event: { type: 'tool:summary', data: event } })
+  })
+
   driver.on('assistant:message', (content) => {
     pushEvent({ sessionId, event: { type: 'assistant:message', data: content } })
   })

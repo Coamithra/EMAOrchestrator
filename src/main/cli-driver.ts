@@ -31,8 +31,49 @@ import type {
   UserQuestionRequest,
   UserQuestionResponse,
   SessionResult,
-  AssistantContent
+  AssistantContent,
+  ToolStartEvent
 } from '../shared/cli-driver'
+
+/** Produce a short human-readable summary of a tool's input for terminal display. */
+function summarizeToolInput(toolName: string, input: Record<string, unknown>): string {
+  const name = toolName.toLowerCase()
+
+  // File-oriented tools — show the path
+  if (input.file_path && typeof input.file_path === 'string') {
+    return input.file_path
+  }
+  if (input.path && typeof input.path === 'string') {
+    return input.path
+  }
+
+  // Search tools — show the pattern
+  if (input.pattern && typeof input.pattern === 'string') {
+    return input.pattern
+  }
+
+  // Bash — show first 80 chars of the command
+  if (name === 'bash' && input.command && typeof input.command === 'string') {
+    const cmd = input.command.length > 80 ? input.command.slice(0, 77) + '...' : input.command
+    return cmd
+  }
+
+  // Agent tool — show the description or prompt start
+  if (name === 'agent') {
+    if (input.description && typeof input.description === 'string') return input.description
+    if (input.prompt && typeof input.prompt === 'string') {
+      return input.prompt.length > 60 ? input.prompt.slice(0, 57) + '...' : input.prompt
+    }
+  }
+
+  // Generic fallback — first string value, truncated
+  for (const val of Object.values(input)) {
+    if (typeof val === 'string' && val.length > 0) {
+      return val.length > 60 ? val.slice(0, 57) + '...' : val
+    }
+  }
+  return ''
+}
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -211,7 +252,20 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
           break
         }
 
-        // user, status, tool_progress, etc. — silently consumed for now
+        case 'tool_progress':
+          this.emit('tool:activity', {
+            toolName: (message as { tool_name?: string }).tool_name ?? 'unknown',
+            elapsedSeconds: (message as { elapsed_time_seconds?: number }).elapsed_time_seconds ?? 0
+          })
+          break
+
+        case 'tool_use_summary':
+          this.emit('tool:summary', {
+            summary: (message as { summary?: string }).summary ?? ''
+          })
+          break
+
+        // user, status, etc. — silently consumed for now
       }
     }
 
@@ -276,6 +330,15 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
         toolName: block.name ?? 'unknown',
         input: block.input ?? {}
       }))
+
+    // Emit tool:start for each tool use so the renderer can show what's happening
+    for (const tu of toolUses) {
+      const startEvent: ToolStartEvent = {
+        toolName: tu.toolName,
+        inputSummary: summarizeToolInput(tu.toolName, tu.input)
+      }
+      this.emit('tool:start', startEvent)
+    }
 
     const parsed: AssistantContent = { text, toolUses }
     this.emit('assistant:message', parsed)
