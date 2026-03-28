@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { CliDriver } from './cli-driver'
+import { CliDriver, summarizeToolInput } from './cli-driver'
 import { generateStepPrompt } from './prompt-generator'
 import { TypedEventEmitter } from './typed-emitter'
 import { moveCard, addComment } from './trello-service'
@@ -400,7 +400,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       sm.advanceStep()
 
       // Set summary after advance (history record now exists)
-      const summary = entry.lastAssistantText.slice(-500) || 'Step completed.'
+      const summary = extractStepSummary(entry.lastAssistantText)
       this.agentManager.setStepSummary(agentId, completedPhaseIndex, completedStepIndex, summary)
 
       // Check off the completed step in the tracker doc (fire-and-forget)
@@ -550,20 +550,23 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
       driver.on('permission:request', (request) => {
         const sm = this.agentManager.getStateMachine(agentId)
+        // Capture snapshot BEFORE transitioning — waiting_for_human resets phaseIndex to -1
+        const snap = sm?.getSnapshot()
         if (sm && sm.getState() !== 'waiting_for_human') {
           sm.setWaitingForHuman()
         }
-        const snap = sm?.getSnapshot()
+        const inputSummary = summarizeToolInput(request.toolName, request.toolInput)
+        const detail = `${request.toolName}: ${inputSummary}`
         this.log(agentId, {
           event: 'permission_requested',
           phaseIndex: snap?.phaseIndex ?? -1,
           stepIndex: snap?.stepIndex ?? -1,
           toolName: request.toolName,
-          detail: `${request.toolName}: ${request.title ?? request.description ?? ''}`
+          detail
         })
         this.agentManager.setPendingHumanInteraction(agentId, {
           type: 'permission',
-          detail: `${request.toolName}: ${request.title ?? request.description ?? ''}`,
+          detail,
           occurredAt: new Date().toISOString(),
           permissionRequest: request
         })
@@ -571,10 +574,11 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
       driver.on('user:question', (request) => {
         const sm = this.agentManager.getStateMachine(agentId)
+        // Capture snapshot BEFORE transitioning — waiting_for_human resets phaseIndex to -1
+        const snap = sm?.getSnapshot()
         if (sm && sm.getState() !== 'waiting_for_human') {
           sm.setWaitingForHuman()
         }
-        const snap = sm?.getSnapshot()
         this.log(agentId, {
           event: 'question_asked',
           phaseIndex: snap?.phaseIndex ?? -1,
@@ -820,4 +824,34 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       push({ type: 'error', data: { message: err.message } })
     })
   }
+}
+
+/**
+ * Extract a step summary from the last assistant message.
+ * The step prompt asks Claude to provide a summary after a `---` separator.
+ * Falls back to the last complete paragraph, then to a tail slice.
+ */
+function extractStepSummary(text: string): string {
+  if (!text) return 'Step completed.'
+
+  // Strategy 1: text after the last "---" separator (matches prompt convention)
+  const separatorIndex = text.lastIndexOf('\n---')
+  if (separatorIndex !== -1) {
+    const afterSeparator = text.slice(separatorIndex + 4).trim()
+    if (afterSeparator.length > 0) {
+      return afterSeparator.slice(0, 500)
+    }
+  }
+
+  // Strategy 2: last non-empty paragraph (double-newline delimited)
+  const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 0)
+  if (paragraphs.length > 0) {
+    const lastParagraph = paragraphs[paragraphs.length - 1].trim()
+    if (lastParagraph.length > 0) {
+      return lastParagraph.slice(0, 500)
+    }
+  }
+
+  // Strategy 3: tail slice (original behavior, kept as last resort)
+  return text.slice(-500) || 'Step completed.'
 }

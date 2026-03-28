@@ -37,7 +37,7 @@ import type {
 } from '../shared/cli-driver'
 
 /** Produce a short human-readable summary of a tool's input for terminal display. */
-function summarizeToolInput(toolName: string, input: Record<string, unknown>): string {
+export function summarizeToolInput(toolName: string, input: Record<string, unknown>): string {
   const name = toolName.toLowerCase()
 
   // File-oriented tools — show the path
