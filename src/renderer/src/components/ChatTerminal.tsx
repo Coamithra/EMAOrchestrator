@@ -45,10 +45,12 @@ function ChatTerminal({ agentId }: ChatTerminalProps): React.JSX.Element {
         case 'block:appended':
           blocksRef.current = [...blocksRef.current, update.block]
           break
-        case 'block:updated':
-          // Shallow copy to trigger re-render of the affected block
-          blocksRef.current = [...blocksRef.current]
+        case 'block:updated': {
+          // Replace the affected block's reference so memo comparators detect the change
+          const idx = update.blockIndex
+          blocksRef.current = blocksRef.current.map((b, i) => (i === idx ? { ...b } : b))
           break
+        }
         case 'blocks:reset':
           blocksRef.current = [...getBlocks(agentId)]
           break

@@ -9,7 +9,6 @@ function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const isBash = block.toolName.toLowerCase() === 'bash'
   const hasSummary = block.summary && block.summary.length > 0
-  const hasInput = block.toolInput && Object.keys(block.toolInput).length > 0
 
   return (
     <div className="block-tool">
@@ -36,13 +35,8 @@ function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
         )}
       </div>
 
-      {expanded && (hasSummary || hasInput) && (
-        <div className="block-tool__detail">
-          {hasSummary && <div>{block.summary}</div>}
-          {hasInput && (
-            <pre className="block-tool__input-json">{JSON.stringify(block.toolInput, null, 2)}</pre>
-          )}
-        </div>
+      {expanded && hasSummary && (
+        <div className="block-tool__detail">{block.summary}</div>
       )}
     </div>
   )

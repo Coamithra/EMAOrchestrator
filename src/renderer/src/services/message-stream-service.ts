@@ -164,6 +164,7 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
 
     case 'approval:status': {
       flushMdBuffer(agentId)
+      finalizeTextBlock(agentId)
       appendBlock(agentId, {
         type: 'status',
         id: blockId(),

@@ -18,8 +18,8 @@ function App(): React.JSX.Element {
   const [runningAgentIds, setRunningAgentIds] = useState<Set<string>>(new Set())
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false)
 
-  // Initialize terminal output buffer early so it captures events for all agents,
-  // even before any TerminalView is mounted. Runs once on app startup.
+  // Initialize message stream early so it captures events for all agents,
+  // even before any ChatTerminal is mounted. Runs once on app startup.
   useEffect(() => {
     initMessageStream()
   }, [])
