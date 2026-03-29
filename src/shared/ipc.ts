@@ -3,6 +3,8 @@ import type {
   CliSessionOptions,
   PermissionRequest,
   PermissionResponse,
+  SecurityAlertRequest,
+  SecurityAlertResponse,
   UserQuestionRequest,
   UserQuestionResponse,
   SessionInfo,
@@ -62,6 +64,7 @@ export const IpcChannels = {
   ORCHESTRATION_STOP: 'orchestration:stop',
   ORCHESTRATION_RESPOND_PERMISSION: 'orchestration:respondPermission',
   ORCHESTRATION_RESPOND_QUESTION: 'orchestration:respondQuestion',
+  ORCHESTRATION_RESPOND_SECURITY_ALERT: 'orchestration:respondSecurityAlert',
   ORCHESTRATION_IS_RUNNING: 'orchestration:isRunning',
   ORCHESTRATION_GET_CONCURRENCY_STATUS: 'orchestration:getConcurrencyStatus',
 
@@ -98,6 +101,7 @@ export type CliEvent =
   | { type: 'tool:activity'; data: ToolActivityEvent }
   | { type: 'tool:summary'; data: ToolSummaryEvent }
   | { type: 'permission:request'; data: PermissionRequest }
+  | { type: 'security:alert'; data: SecurityAlertRequest }
   | { type: 'user:question'; data: UserQuestionRequest }
   | { type: 'session:result'; data: SessionResult }
   | { type: 'error'; data: { message: string } }
@@ -171,6 +175,7 @@ export interface OrchestrationAPI {
   stopOrchestration(agentId: string): Promise<void>
   respondToOrchestrationPermission(agentId: string, response: PermissionResponse): Promise<void>
   respondToOrchestrationQuestion(agentId: string, response: UserQuestionResponse): Promise<void>
+  respondToOrchestrationSecurityAlert(agentId: string, response: SecurityAlertResponse): Promise<void>
   isOrchestrationRunning(agentId: string): Promise<boolean>
   getConcurrencyStatus(): Promise<ConcurrencyStatus>
 }

@@ -60,6 +60,11 @@
   color: #facc15;
 }
 
+.agent-detail-panel__waiting-badge--alert {
+  background: rgba(220, 38, 38, 0.15);
+  color: #ef4444;
+}
+
 .agent-detail-panel__resume-btn,
 .agent-detail-panel__stop-btn {
   padding: 4px 12px;

@@ -52,6 +52,24 @@ export interface PermissionResponse {
   rememberChoice?: boolean
 }
 
+/** Emitted when the smart auto-approver returns 'no' (genuinely dangerous operation). */
+export interface SecurityAlertRequest {
+  requestId: string
+  toolName: string
+  toolInput: Record<string, unknown>
+  toolUseId: string
+  explanation: string
+  title?: string
+  description?: string
+}
+
+/** Caller response to a SecurityAlertRequest. */
+export interface SecurityAlertResponse {
+  requestId: string
+  /** 'override' allows the tool call despite the warning. 'dismiss' stops the agent. */
+  behavior: 'override' | 'dismiss'
+}
+
 /** Emitted when Claude calls the AskUserQuestion tool. */
 export interface UserQuestionRequest {
   requestId: string
@@ -120,6 +138,7 @@ export type CliDriverEvents = {
   'tool:activity': (event: ToolActivityEvent) => void
   'tool:summary': (event: ToolSummaryEvent) => void
   'permission:request': (request: PermissionRequest) => void
+  'security:alert': (request: SecurityAlertRequest) => void
   'user:question': (request: UserQuestionRequest) => void
   'session:result': (result: SessionResult) => void
   error: (error: Error) => void

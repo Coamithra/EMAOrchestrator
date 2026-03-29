@@ -29,6 +29,8 @@ import type {
   CliSessionOptions,
   PermissionRequest,
   PermissionResponse,
+  SecurityAlertRequest,
+  SecurityAlertResponse,
   UserQuestionRequest,
   UserQuestionResponse,
   SessionResult,
@@ -104,6 +106,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
   private queryHandle: Query | null = null
 
   private pendingPermissions = new Map<string, Deferred<PermissionResult>>()
+  private pendingSecurityAlerts = new Map<string, Deferred<PermissionResult>>()
 
   /** Start a new CLI session. Resolves when the session completes or errors. */
   async startSession(options: CliSessionOptions): Promise<void> {
@@ -144,8 +147,9 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     } finally {
       this.queryHandle = null
       this.abortController = null
-      // Clean up any pending permissions that were orphaned (e.g., by abort)
+      // Clean up any pending permissions/alerts that were orphaned (e.g., by abort)
       this.pendingPermissions.clear()
+      this.pendingSecurityAlerts.clear()
     }
   }
 
@@ -160,6 +164,20 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
       pending.resolve({ behavior: 'allow', updatedInput: response.updatedInput })
     } else {
       pending.resolve({ behavior: 'deny', message: response.message ?? 'Denied by user' })
+    }
+  }
+
+  /** Resolve a pending security alert, unblocking the SDK. */
+  respondToSecurityAlert(response: SecurityAlertResponse): void {
+    const pending = this.pendingSecurityAlerts.get(response.requestId)
+    if (!pending) {
+      throw new Error(`No pending security alert: ${response.requestId}`)
+    }
+
+    if (response.behavior === 'override') {
+      pending.resolve({ behavior: 'allow' })
+    } else {
+      pending.resolve({ behavior: 'deny', message: 'Dismissed by user (security alert)' })
     }
   }
 
@@ -366,19 +384,55 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
       // Smart LLM-based evaluation
       if (mode === 'smart') {
         try {
-          const decision = await evaluatePermission({
+          const result = await evaluatePermission({
             toolName,
             toolInput: input,
             worktreePath: sessionOptions.worktreePath,
             currentStepTitle: sessionOptions.currentStepTitle
           })
-          if (decision === 'yes') {
+          if (result.decision === 'yes') {
             this.emit('stream:text', {
               text: `\x1b[32m[smart-approved] ${toolName}: ${inputSummary}\x1b[0m\r\n`
             })
             return { behavior: 'allow' }
           }
-          // 'no' or 'maybe' — fall through to manual approval
+          if (result.decision === 'no') {
+            // Genuinely dangerous — halt and show security alert
+            const alertRequestId = randomUUID()
+            const alertDeferred = createDeferred<PermissionResult>()
+            this.pendingSecurityAlerts.set(alertRequestId, alertDeferred)
+
+            this.setState('waiting_permission')
+
+            const alertRequest: SecurityAlertRequest = {
+              requestId: alertRequestId,
+              toolName,
+              toolInput: input,
+              toolUseId: options.toolUseID,
+              explanation: result.explanation ?? 'This operation was flagged as dangerous.',
+              title: options.title,
+              description: options.description
+            }
+            this.emit('security:alert', alertRequest)
+
+            const onAbort = (): void => {
+              if (this.pendingSecurityAlerts.has(alertRequestId)) {
+                alertDeferred.resolve({ behavior: 'deny', message: 'Aborted' })
+              }
+            }
+            options.signal.addEventListener('abort', onAbort, { once: true })
+
+            const alertResult = await alertDeferred.promise
+
+            options.signal.removeEventListener('abort', onAbort)
+            this.pendingSecurityAlerts.delete(alertRequestId)
+            if ((this.state as CliDriverState) === 'waiting_permission') {
+              this.setState('running')
+            }
+
+            return alertResult
+          }
+          // 'maybe' — fall through to manual approval
         } catch {
           // Defense-in-depth: evaluatePermission catches internally, but guard anyway
         }

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { AgentSnapshot } from '@shared/agent-manager'
-import type { PermissionRequest, PermissionResponse, UserQuestionRequest, UserQuestionResponse } from '@shared/cli-driver'
+import type { PermissionRequest, PermissionResponse, SecurityAlertRequest, SecurityAlertResponse, UserQuestionRequest, UserQuestionResponse } from '@shared/cli-driver'
 import type { CliEventPayload } from '@shared/ipc'
 import TerminalView from './TerminalView'
 import StepProgress from './StepProgress'
 import PermissionDialog from './PermissionDialog'
+import SecurityAlertDialog from './SecurityAlertDialog'
 import QuestionDialog from './QuestionDialog'
 import type { PhaseInfo } from './StepProgress'
 import './AgentDetailPanel.css'
@@ -49,6 +50,7 @@ function canStop(isRunning: boolean): boolean {
 
 function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentDetailPanelProps): React.JSX.Element {
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null)
+  const [pendingSecurityAlert, setPendingSecurityAlert] = useState<SecurityAlertRequest | null>(null)
   const [pendingQuestion, setPendingQuestion] = useState<UserQuestionRequest | null>(null)
   const respondedRef = useRef(false)
 
@@ -57,6 +59,7 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
   // Subscribe to cli:event and seed dialog state from snapshot on agent switch
   useEffect(() => {
     setPendingPermission(null)
+    setPendingSecurityAlert(null)
     setPendingQuestion(null)
     respondedRef.current = false
 
@@ -67,7 +70,8 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
     // was created). Falls back to a minimal reconstruction from the detail string
     // for backwards compatibility with older persisted data.
     if (agent?.pendingHumanInteraction) {
-      const { type, detail, permissionRequest, questionRequest } = agent.pendingHumanInteraction
+      const { type, detail, permissionRequest, questionRequest, securityAlertRequest } =
+        agent.pendingHumanInteraction
       if (type === 'permission') {
         setPendingPermission(
           permissionRequest ?? {
@@ -76,6 +80,16 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
             toolInput: {},
             toolUseId: '',
             description: detail
+          }
+        )
+      } else if (type === 'security_alert') {
+        setPendingSecurityAlert(
+          securityAlertRequest ?? {
+            requestId: `restored-${agentId}`,
+            toolName: detail.split(':')[1]?.trim() || 'Unknown tool',
+            toolInput: {},
+            toolUseId: '',
+            explanation: detail
           }
         )
       } else if (type === 'question') {
@@ -96,11 +110,18 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
       if (payload.event.type === 'permission:request') {
         respondedRef.current = false
         setPendingPermission(payload.event.data)
+        setPendingSecurityAlert(null)
+        setPendingQuestion(null)
+      } else if (payload.event.type === 'security:alert') {
+        respondedRef.current = false
+        setPendingSecurityAlert(payload.event.data)
+        setPendingPermission(null)
         setPendingQuestion(null)
       } else if (payload.event.type === 'user:question') {
         respondedRef.current = false
         setPendingQuestion(payload.event.data)
         setPendingPermission(null)
+        setPendingSecurityAlert(null)
       }
     })
 
@@ -111,6 +132,7 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
   useEffect(() => {
     if (agent && agent.stateSnapshot.state !== 'waiting_for_human') {
       setPendingPermission(null)
+      setPendingSecurityAlert(null)
       setPendingQuestion(null)
     }
   }, [agent?.stateSnapshot.state])
@@ -121,6 +143,16 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
       respondedRef.current = true
       window.api.respondToOrchestrationPermission(agentId, response)
       setPendingPermission(null)
+    },
+    [agentId]
+  )
+
+  const handleSecurityAlertResponse = useCallback(
+    (response: SecurityAlertResponse) => {
+      if (!agentId || respondedRef.current) return
+      respondedRef.current = true
+      window.api.respondToOrchestrationSecurityAlert(agentId, response)
+      setPendingSecurityAlert(null)
     },
     [agentId]
   )
@@ -154,10 +186,17 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
         </div>
         <div className="agent-detail-panel__header-right">
           {agent.pendingHumanInteraction && (
-            <div className="agent-detail-panel__waiting-badge">
+            <div className={
+              'agent-detail-panel__waiting-badge' +
+              (agent.pendingHumanInteraction.type === 'security_alert'
+                ? ' agent-detail-panel__waiting-badge--alert'
+                : '')
+            }>
               {agent.pendingHumanInteraction.type === 'permission'
                 ? 'Permission required'
-                : 'Question pending'}
+                : agent.pendingHumanInteraction.type === 'security_alert'
+                  ? 'Security alert'
+                  : 'Question pending'}
             </div>
           )}
           {canResume(agent, isRunning) && (
@@ -194,6 +233,13 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
               key={pendingPermission.requestId}
               request={pendingPermission}
               onRespond={handlePermissionResponse}
+            />
+          )}
+          {isRunning && pendingSecurityAlert && (
+            <SecurityAlertDialog
+              key={pendingSecurityAlert.requestId}
+              request={pendingSecurityAlert}
+              onRespond={handleSecurityAlertResponse}
             />
           )}
           {isRunning && pendingQuestion && (

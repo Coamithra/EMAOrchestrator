@@ -19,7 +19,7 @@ import {
   SYSTEM_PROMPT,
   EVALUATE_TIMEOUT_MS,
   SAFE_TOOLS,
-  parseDecision
+  parseEvaluationResult
 } from '../smart-approval-service'
 import { TEST_VECTORS } from './integration-test-vectors'
 import type { TestVector } from './integration-test-vectors'
@@ -99,7 +99,7 @@ async function evaluateWithDetails(vector: TestVector): Promise<TestResult> {
 
     const elapsedMs = Date.now() - startTime
     const rawResponse = textChunks.join('').trim()
-    const decision = parseDecision(rawResponse)
+    const { decision } = parseEvaluationResult(rawResponse)
 
     const passed =
       vector.expectation === 'safe' ? decision === 'yes' : decision !== 'yes'

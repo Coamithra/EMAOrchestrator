@@ -12,6 +12,7 @@ import type {
   SessionResult,
   AssistantContent,
   PermissionResponse,
+  SecurityAlertResponse,
   UserQuestionResponse
 } from '../shared/cli-driver'
 import type { ApprovalMode } from '../shared/config'
@@ -155,6 +156,32 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     if (!entry?.driver) return // agent was stopped or has no active session
 
     await entry.driver.respondToUserQuestion(response)
+    entry.lastActivityAt = Date.now()
+    entry.stuckNotified = false
+
+    const sm = this.agentManager.getStateMachine(agentId)
+    if (sm?.getState() === 'waiting_for_human') {
+      sm.resumeFromWaiting()
+    }
+    this.agentManager.setPendingHumanInteraction(agentId, null)
+  }
+
+  /**
+   * Respond to a security alert on an agent's active CLI session.
+   * 'override' allows the tool call despite the warning. 'dismiss' stops the agent.
+   */
+  respondToSecurityAlert(agentId: string, response: SecurityAlertResponse): void {
+    const entry = this.running.get(agentId)
+    if (!entry?.driver) return
+
+    if (response.behavior === 'dismiss') {
+      // Stop the agent entirely — the dangerous operation is denied
+      this.stopAgent(agentId)
+      return
+    }
+
+    // Override: allow the tool call
+    entry.driver.respondToSecurityAlert(response)
     entry.lastActivityAt = Date.now()
     entry.stuckNotified = false
 
@@ -586,6 +613,29 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         })
       })
 
+      driver.on('security:alert', (request) => {
+        const sm = this.agentManager.getStateMachine(agentId)
+        const snap = sm?.getSnapshot()
+        if (sm && sm.getState() !== 'waiting_for_human') {
+          sm.setWaitingForHuman()
+        }
+        const inputSummary = summarizeToolInput(request.toolName, request.toolInput)
+        const detail = `SECURITY ALERT: ${request.toolName}: ${inputSummary}`
+        this.log(agentId, {
+          event: 'permission_requested',
+          phaseIndex: snap?.phaseIndex ?? -1,
+          stepIndex: snap?.stepIndex ?? -1,
+          toolName: request.toolName,
+          detail
+        })
+        this.agentManager.setPendingHumanInteraction(agentId, {
+          type: 'security_alert',
+          detail,
+          occurredAt: new Date().toISOString(),
+          securityAlertRequest: request
+        })
+      })
+
       driver.on('user:question', (request) => {
         const sm = this.agentManager.getStateMachine(agentId)
         // Capture snapshot BEFORE transitioning — waiting_for_human resets phaseIndex to -1
@@ -827,6 +877,9 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     })
     driver.on('permission:request', (request) => {
       push({ type: 'permission:request', data: request })
+    })
+    driver.on('security:alert', (request) => {
+      push({ type: 'security:alert', data: request })
     })
     driver.on('user:question', (request) => {
       push({ type: 'user:question', data: request })

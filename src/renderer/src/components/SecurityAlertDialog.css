@@ -1,0 +1,54 @@
+@import './InteractionDialog.css';
+
+/* Security alert overrides — red/danger theme */
+
+.security-alert-dialog__card {
+  border-color: #dc2626;
+}
+
+.security-alert-dialog__header {
+  background: rgba(220, 38, 38, 0.1);
+  border-bottom-color: #dc2626;
+}
+
+.security-alert-dialog__icon {
+  color: #ef4444;
+  font-size: 18px;
+}
+
+.security-alert-dialog__title {
+  color: #ef4444;
+}
+
+.security-alert-dialog__explanation {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ev-c-text-1);
+  padding: 10px 12px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 4px;
+}
+
+.security-alert-dialog__btn--dismiss {
+  background: #dc2626;
+  color: #fff;
+}
+
+.security-alert-dialog__btn--override {
+  background: var(--ev-c-gray-2);
+  color: var(--ev-c-text-2);
+}
+
+.security-alert-dialog__btn--confirm-override {
+  background: #dc2626;
+  color: #fff;
+}
+
+.security-alert-dialog__confirm-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ef4444;
+  align-self: center;
+  margin-right: auto;
+}

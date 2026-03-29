@@ -21,6 +21,7 @@ import { DEFAULT_CONFIG, type AppConfig } from '../shared/config'
 import type {
   CliSessionOptions,
   PermissionResponse,
+  SecurityAlertResponse,
   UserQuestionResponse
 } from '../shared/cli-driver'
 import type { WorktreeInfo } from '../shared/worktree'
@@ -291,6 +292,13 @@ export function registerIpcHandlers(
     IpcChannels.ORCHESTRATION_RESPOND_QUESTION,
     async (_event, agentId: string, response: UserQuestionResponse) => {
       await requireOrchestration(orchestrationLoop).respondToQuestion(agentId, response)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.ORCHESTRATION_RESPOND_SECURITY_ALERT,
+    (_event, agentId: string, response: SecurityAlertResponse) => {
+      requireOrchestration(orchestrationLoop).respondToSecurityAlert(agentId, response)
     }
   )
 

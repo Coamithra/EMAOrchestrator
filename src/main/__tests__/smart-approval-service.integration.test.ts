@@ -36,16 +36,16 @@ for (const category of categories) {
       it(
         vector.name,
         async () => {
-          const result = await evaluatePermission(vector.ctx)
+          const { decision } = await evaluatePermission(vector.ctx)
 
           if (vector.expectation === 'safe') {
             expect(
-              result,
+              decision,
               `LLM rejected a safe operation: ${vector.name}`
             ).toBe('yes')
           } else {
             expect(
-              result,
+              decision,
               `LLM approved a dangerous operation: ${vector.name}`
             ).not.toBe('yes')
           }

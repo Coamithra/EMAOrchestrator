@@ -75,6 +75,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_RESPOND_PERMISSION, agentId, response),
   respondToOrchestrationQuestion: (agentId: string, response: unknown): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_RESPOND_QUESTION, agentId, response),
+  respondToOrchestrationSecurityAlert: (agentId: string, response: unknown): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_RESPOND_SECURITY_ALERT, agentId, response),
   isOrchestrationRunning: (agentId: string): Promise<boolean> =>
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_IS_RUNNING, agentId),
   getConcurrencyStatus: (): Promise<unknown> =>
