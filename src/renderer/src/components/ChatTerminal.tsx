@@ -43,7 +43,10 @@ function ChatTerminal({ agentId }: ChatTerminalProps): React.JSX.Element {
     const unsubscribe = subscribe(agentId, (update: BlockUpdate) => {
       switch (update.type) {
         case 'block:appended':
-          blocksRef.current = [...blocksRef.current, update.block]
+          // Clone so blocksRef never holds a live store reference — in-place
+          // mutations to the store object would make React.memo comparisons
+          // see stale === fresh, skipping re-renders.
+          blocksRef.current = [...blocksRef.current, { ...update.block }]
           break
         case 'block:updated': {
           // Clone the FRESH block from the store — blocksRef may hold a stale clone

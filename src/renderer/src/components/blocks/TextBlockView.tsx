@@ -66,9 +66,10 @@ function TextBlockViewInner({ block }: TextBlockViewProps): React.JSX.Element {
   )
 }
 
-const TextBlockView = memo(TextBlockViewInner, (prev, next) => {
-  // Re-render only when content changes or streaming state changes
-  return prev.block.content === next.block.content && prev.block.streaming === next.block.streaming
-})
+// Default memo uses reference equality on props. The ChatTerminal creates a new
+// block reference ({ ...b }) on every block:updated notification, so this correctly
+// triggers re-renders. A custom field comparator breaks because blocks are mutated
+// in place before cloning — both old and new objects end up with identical values.
+const TextBlockView = memo(TextBlockViewInner)
 
 export default TextBlockView
