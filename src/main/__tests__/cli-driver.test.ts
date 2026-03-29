@@ -7,7 +7,8 @@ import type {
   SessionResult,
   StreamTextDelta,
   AssistantContent,
-  UserQuestionRequest
+  UserQuestionRequest,
+  ToolResultEvent
 } from '../../shared/cli-driver'
 
 let mockMessages: SDKMessage[] = []
@@ -639,6 +640,101 @@ describe('CliDriver', () => {
       await sessionPromise
 
       expect(errors).toHaveLength(0)
+    })
+  })
+
+  describe('tool:result events from user messages', () => {
+    function userMessage(toolUseResult: unknown): SDKMessage {
+      return {
+        type: 'user',
+        tool_use_result: toolUseResult,
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu_abc123',
+              content: 'result text'
+            }
+          ]
+        },
+        parent_tool_use_id: null,
+        session_id: 'test-session-123',
+        uuid: '00000000-0000-0000-0000-000000000010' as `${string}-${string}-${string}-${string}-${string}`
+      } as unknown as SDKMessage
+    }
+
+    it('emits tool:result when tool_use_result is a string', async () => {
+      const results: ToolResultEvent[] = []
+      driver.on('tool:result', (e) => results.push(e))
+
+      mockMessages = [
+        systemInitMessage(),
+        userMessage('ls output here'),
+        resultMessage()
+      ]
+
+      await driver.startSession({ prompt: 'test', cwd: '/test' })
+
+      expect(results).toHaveLength(1)
+      expect(results[0].result).toBe('ls output here')
+      expect(results[0].toolUseId).toBe('toolu_abc123')
+    })
+
+    it('emits tool:result when tool_use_result is an array of text blocks', async () => {
+      const results: ToolResultEvent[] = []
+      driver.on('tool:result', (e) => results.push(e))
+
+      mockMessages = [
+        systemInitMessage(),
+        userMessage([
+          { type: 'text', text: 'line 1' },
+          { type: 'text', text: 'line 2' }
+        ]),
+        resultMessage()
+      ]
+
+      await driver.startSession({ prompt: 'test', cwd: '/test' })
+
+      expect(results).toHaveLength(1)
+      expect(results[0].result).toBe('line 1\nline 2')
+    })
+
+    it('does not emit tool:result when tool_use_result is missing', async () => {
+      const results: ToolResultEvent[] = []
+      driver.on('tool:result', (e) => results.push(e))
+
+      mockMessages = [
+        systemInitMessage(),
+        {
+          type: 'user',
+          message: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+          parent_tool_use_id: null,
+          session_id: 'test-session-123',
+          uuid: '00000000-0000-0000-0000-000000000011' as `${string}-${string}-${string}-${string}-${string}`
+        } as unknown as SDKMessage,
+        resultMessage()
+      ]
+
+      await driver.startSession({ prompt: 'test', cwd: '/test' })
+
+      expect(results).toHaveLength(0)
+    })
+
+    it('emits tool:result when tool_use_result is an object (JSON fallback)', async () => {
+      const results: ToolResultEvent[] = []
+      driver.on('tool:result', (e) => results.push(e))
+
+      mockMessages = [
+        systemInitMessage(),
+        userMessage({ key: 'value' }),
+        resultMessage()
+      ]
+
+      await driver.startSession({ prompt: 'test', cwd: '/test' })
+
+      expect(results).toHaveLength(1)
+      expect(results[0].result).toBe(JSON.stringify({ key: 'value' }, null, 2))
     })
   })
 })

@@ -292,6 +292,11 @@
   word-break: break-word;
 }
 
+.block-tool__no-output {
+  color: var(--ev-c-text-3);
+  font-style: italic;
+}
+
 /* ---------------------------------------------------------------------------
  * ResultBlock — session stats
  * --------------------------------------------------------------------------- */
