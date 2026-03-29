@@ -241,11 +241,17 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
   /**
    * Send a direct user prompt to an agent, bypassing runbook execution.
-   * If the agent is currently running a step, it is stopped first.
-   * After the prompt completes, the agent stays paused — Resume continues the runbook.
+   * If the agent is currently running a step (or a previous direct prompt),
+   * it is stopped first. After the prompt completes, the agent stays paused —
+   * Resume continues the runbook.
+   *
+   * The driver is registered in `this.running` so that permissions, questions,
+   * security alerts, stopAgent(), and abortAll() all work correctly.
    */
   async sendDirectPrompt(agentId: string, prompt: string): Promise<void> {
-    // Stop the agent if it's currently running a runbook step
+    if (!prompt.trim()) throw new Error('Prompt cannot be empty')
+
+    // Stop the agent if it's currently running (runbook step or previous direct prompt)
     if (this.running.has(agentId)) {
       this.stopAgent(agentId)
     }
@@ -256,44 +262,132 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     const config = await loadConfig()
     const cwd = config?.targetRepoPath || agent.worktree.path
 
+    // Register in the running map so respondToPermission/stopAgent/abortAll work
+    const entry: RunningAgent = {
+      agentId,
+      driver: null,
+      sdkSessionId: agent.sessionId ?? null,
+      lastAssistantText: '',
+      stopped: false,
+      lastActivityAt: Date.now(),
+      stuckNotified: false,
+      stuckCheckInterval: null,
+      stepStartedAt: Date.now(),
+      approvalModeOverride: null
+    }
+    this.running.set(agentId, entry)
+
     const driver = new CliDriver()
+    entry.driver = driver
     this.wireDriverToRenderer(agentId, driver)
 
-    const effectiveApproval = this.approvalMode
+    const effectiveApproval = entry.approvalModeOverride ?? this.approvalMode
 
     // Capture new session ID so resume preserves conversation context
     driver.on('session:init', (info) => {
+      entry.sdkSessionId = info.sessionId
       this.agentManager.setSessionId(agentId, info.sessionId)
+      entry.lastActivityAt = Date.now()
+      entry.stuckNotified = false
     })
 
-    return new Promise<void>((resolve, reject) => {
-      driver.on('session:result', () => resolve())
-      driver.on('error', (err) => reject(err))
+    driver.on('stream:text', () => {
+      entry.lastActivityAt = Date.now()
+      entry.stuckNotified = false
+    })
 
-      // Emit a banner so the user sees this is a direct prompt, not a runbook step
-      const renderSessionId = `orchestration-${agentId}`
-      const win = BrowserWindow.getAllWindows()[0]
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('cli:event', {
-          sessionId: renderSessionId,
-          event: {
-            type: 'stream:text' as const,
-            data: { text: '\n--- Direct prompt ---\n' }
-          }
-        } satisfies CliEventPayload)
+    driver.on('assistant:message', (content: AssistantContent) => {
+      if (content.text) entry.lastAssistantText = content.text
+      entry.lastActivityAt = Date.now()
+      entry.stuckNotified = false
+    })
+
+    // Wire permission/question/alert handlers so dialogs appear during direct prompts
+    driver.on('permission:request', (request) => {
+      const sm = this.agentManager.getStateMachine(agentId)
+      if (sm && sm.getState() !== 'waiting_for_human') {
+        sm.setWaitingForHuman()
       }
-
-      driver
-        .startSession({
-          prompt,
-          cwd,
-          sessionId: agent.sessionId ?? undefined,
-          settingSources: ['user', 'project', 'local'],
-          approvalMode: effectiveApproval,
-          worktreePath: agent.worktree.path
-        })
-        .catch(reject)
+      const inputSummary = summarizeToolInput(request.toolName, request.toolInput)
+      const detail = `${request.toolName}: ${inputSummary}`
+      this.agentManager.setPendingHumanInteraction(agentId, {
+        type: 'permission',
+        detail,
+        occurredAt: new Date().toISOString(),
+        permissionRequest: request
+      })
     })
+
+    driver.on('security:alert', (request) => {
+      const sm = this.agentManager.getStateMachine(agentId)
+      if (sm && sm.getState() !== 'waiting_for_human') {
+        sm.setWaitingForHuman()
+      }
+      const inputSummary = summarizeToolInput(request.toolName, request.toolInput)
+      const detail = `SECURITY ALERT: ${request.toolName}: ${inputSummary}`
+      this.agentManager.setPendingHumanInteraction(agentId, {
+        type: 'security_alert',
+        detail,
+        occurredAt: new Date().toISOString(),
+        securityAlertRequest: request
+      })
+    })
+
+    driver.on('user:question', (request) => {
+      const sm = this.agentManager.getStateMachine(agentId)
+      if (sm && sm.getState() !== 'waiting_for_human') {
+        sm.setWaitingForHuman()
+      }
+      this.agentManager.setPendingHumanInteraction(agentId, {
+        type: 'question',
+        detail: request.question,
+        occurredAt: new Date().toISOString(),
+        questionRequest: request
+      })
+    })
+
+    // Emit a banner so the user sees this is a direct prompt, not a runbook step
+    const renderSessionId = `orchestration-${agentId}`
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('cli:event', {
+        sessionId: renderSessionId,
+        event: {
+          type: 'stream:text' as const,
+          data: { text: '\n--- Direct prompt ---\n' }
+        }
+      } satisfies CliEventPayload)
+    }
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        driver.on('session:result', () => resolve())
+        driver.on('error', (err) => {
+          if (!entry.stopped) reject(err)
+          else resolve()
+        })
+
+        driver
+          .startSession({
+            prompt,
+            cwd,
+            sessionId: agent.sessionId ?? undefined,
+            settingSources: ['user', 'project', 'local'],
+            approvalMode: effectiveApproval,
+            worktreePath: agent.worktree.path
+          })
+          .catch((err) => {
+            if (!entry.stopped) reject(err)
+            else resolve()
+          })
+      })
+    } finally {
+      // Only remove if this entry is still the one in the map (not replaced by a new call)
+      if (this.running.get(agentId) === entry) {
+        this.running.delete(agentId)
+      }
+      this.agentManager.setPendingHumanInteraction(agentId, null)
+    }
   }
 
   /** Abort all running agent loops and clear the queue. Called on app quit. */
@@ -339,8 +433,11 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       })
       .finally(() => {
         this.stopStuckWatchdog(entry)
-        // Ensure the running slot is always freed, even on unexpected throws
-        this.running.delete(agentId)
+        // Only remove if this entry is still the one in the map — a direct prompt
+        // or restart may have replaced it while the old loop was winding down.
+        if (this.running.get(agentId) === entry) {
+          this.running.delete(agentId)
+        }
         // Don't clear session ID here — preserve it for resume.
         // It's cleared in runAgentLoop only on successful completion (done state).
         this.tryDequeue()

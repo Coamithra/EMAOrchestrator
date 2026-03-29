@@ -9,6 +9,7 @@ interface ConsoleInputProps {
 function ConsoleInput({ agentId, disabled = false }: ConsoleInputProps): React.JSX.Element {
   const [value, setValue] = useState('')
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-resize textarea to content
@@ -25,10 +26,12 @@ function ConsoleInput({ agentId, disabled = false }: ConsoleInputProps): React.J
 
     setSending(true)
     setValue('')
+    setError(null)
     try {
       await window.api.sendDirectPrompt(agentId, trimmed)
     } catch (err) {
-      console.error('Direct prompt failed:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(msg)
     } finally {
       setSending(false)
     }
@@ -48,24 +51,31 @@ function ConsoleInput({ agentId, disabled = false }: ConsoleInputProps): React.J
 
   return (
     <div className="console-input">
-      <textarea
-        ref={textareaRef}
-        className="console-input__textarea"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Interact with this agent directly"
-        disabled={isDisabled}
-        rows={1}
-      />
-      <button
-        className="console-input__send-btn"
-        onClick={handleSubmit}
-        disabled={isDisabled || !value.trim()}
-        title="Send (Enter)"
-      >
-        {sending ? '...' : '\u2191'}
-      </button>
+      {error && (
+        <div className="console-input__error" onClick={() => setError(null)}>
+          {error}
+        </div>
+      )}
+      <div className="console-input__row">
+        <textarea
+          ref={textareaRef}
+          className="console-input__textarea"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Interact with this agent directly"
+          disabled={isDisabled}
+          rows={1}
+        />
+        <button
+          className="console-input__send-btn"
+          onClick={handleSubmit}
+          disabled={isDisabled || !value.trim()}
+          title="Send (Enter)"
+        >
+          {sending ? '...' : '\u2191'}
+        </button>
+      </div>
     </div>
   )
 }

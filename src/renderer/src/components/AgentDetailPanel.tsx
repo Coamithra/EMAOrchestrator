@@ -230,6 +230,7 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
         <div className="agent-detail-panel__terminal">
           <ChatTerminal agentId={agent.id} />
           <ConsoleInput
+            key={agent.id}
             agentId={agent.id}
             disabled={
               agent.stateSnapshot.state === 'done' ||
