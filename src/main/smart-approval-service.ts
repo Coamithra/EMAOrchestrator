@@ -124,10 +124,12 @@ export function parseEvaluationResult(text: string): EvaluationResult {
   const jsonMatch = text.match(/\{[^}]*"decision"\s*:\s*"(yes|no|maybe)"[^}]*\}/)
   if (jsonMatch) {
     const decision = jsonMatch[1] as ApprovalDecision
-    // Extract explanation if present (for 'no' decisions)
+    // Extract explanation if present (for 'no' decisions).
+    // Search within the matched JSON object, not the full text, to avoid
+    // matching a stray "explanation" field from surrounding prose.
     let explanation: string | undefined
     if (decision === 'no') {
-      const explMatch = text.match(/"explanation"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+      const explMatch = jsonMatch[0].match(/"explanation"\s*:\s*"((?:[^"\\]|\\.)*)"/)
       if (explMatch) {
         explanation = explMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n')
       }
