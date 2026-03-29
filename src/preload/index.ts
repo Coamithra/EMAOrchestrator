@@ -81,6 +81,10 @@ const api = {
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_IS_RUNNING, agentId),
   getConcurrencyStatus: (): Promise<unknown> =>
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_GET_CONCURRENCY_STATUS),
+  setAgentApprovalMode: (agentId: string, mode: string | null): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_SET_AGENT_APPROVAL, agentId, mode),
+  getAgentApprovalMode: (agentId: string): Promise<string> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_GET_AGENT_APPROVAL, agentId),
 
   // Trello
   getTrelloLists: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.TRELLO_GET_LISTS),

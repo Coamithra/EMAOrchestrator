@@ -13,9 +13,10 @@ interface MainLayoutProps {
   runningAgentIds: Set<string>
   onResumeAgent: (agentId: string) => void
   onStopAgent: (agentId: string) => void
+  onDismissAgent: (agentId: string) => void
 }
 
-function MainLayout({ agents, runningAgentIds, onResumeAgent, onStopAgent }: MainLayoutProps): React.JSX.Element {
+function MainLayout({ agents, runningAgentIds, onResumeAgent, onStopAgent, onDismissAgent }: MainLayoutProps): React.JSX.Element {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -87,7 +88,10 @@ function MainLayout({ agents, runningAgentIds, onResumeAgent, onStopAgent }: Mai
         <Sidebar
           agents={agents}
           selectedAgentId={selectedAgentId}
+          runningAgentIds={runningAgentIds}
           onSelectAgent={setSelectedAgentId}
+          onResumeAgent={onResumeAgent}
+          onDismissAgent={onDismissAgent}
         />
       </div>
       <div

@@ -316,6 +316,26 @@ export function registerIpcHandlers(
     )
   })
 
+  ipcMain.handle(
+    IpcChannels.ORCHESTRATION_SET_AGENT_APPROVAL,
+    (_event, agentId: string, mode: string | null) => {
+      if (!orchestrationLoop) return
+      const valid = new Set(['always', 'never', 'smart', null])
+      if (!valid.has(mode)) return
+      orchestrationLoop.setAgentApprovalMode(
+        agentId,
+        mode as import('../shared/config').ApprovalMode | null
+      )
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.ORCHESTRATION_GET_AGENT_APPROVAL,
+    (_event, agentId: string) => {
+      return orchestrationLoop?.getAgentApprovalMode(agentId) ?? 'never'
+    }
+  )
+
   // ---------------------------------------------------------------------------
   // Trello
   // ---------------------------------------------------------------------------

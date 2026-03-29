@@ -21,6 +21,7 @@ import type { WorktreeInfo } from './worktree'
 import type { AgentSnapshot } from './agent-manager'
 import type { PendingHumanInteraction } from './agent-persistence'
 import type { ConcurrencyStatus } from './orchestration-loop'
+import type { ApprovalMode } from './config'
 import type { TrelloCard, TrelloList } from './trello'
 import type { AgentStateSnapshot, AgentStepProgress } from './agent-state'
 import type { LogEntry } from './logging'
@@ -69,6 +70,8 @@ export const IpcChannels = {
   ORCHESTRATION_RESPOND_SECURITY_ALERT: 'orchestration:respondSecurityAlert',
   ORCHESTRATION_IS_RUNNING: 'orchestration:isRunning',
   ORCHESTRATION_GET_CONCURRENCY_STATUS: 'orchestration:getConcurrencyStatus',
+  ORCHESTRATION_SET_AGENT_APPROVAL: 'orchestration:setAgentApproval',
+  ORCHESTRATION_GET_AGENT_APPROVAL: 'orchestration:getAgentApproval',
 
   // Agent events (main → renderer push)
   AGENT_EVENT: 'agent:event',
@@ -182,6 +185,8 @@ export interface OrchestrationAPI {
   respondToOrchestrationSecurityAlert(agentId: string, response: SecurityAlertResponse): Promise<void>
   isOrchestrationRunning(agentId: string): Promise<boolean>
   getConcurrencyStatus(): Promise<ConcurrencyStatus>
+  setAgentApprovalMode(agentId: string, mode: ApprovalMode | null): Promise<void>
+  getAgentApprovalMode(agentId: string): Promise<ApprovalMode>
 }
 
 /** Agent creation API exposed to the renderer. */

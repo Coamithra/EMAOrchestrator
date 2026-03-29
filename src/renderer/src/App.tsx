@@ -215,6 +215,15 @@ function App(): React.JSX.Element {
     }
   }, [])
 
+  const handleDismissAgent = useCallback(async (agentId: string) => {
+    try {
+      await window.api.dismissAgent(agentId)
+      // Agent removal is handled by the agent:destroyed event
+    } catch {
+      // Dismiss failed
+    }
+  }, [])
+
   const handleSettingsClick = useCallback(() => setView('settings'), [])
   const handleRunbookClick = useCallback(() => setView('runbook'), [])
 
@@ -258,6 +267,7 @@ function App(): React.JSX.Element {
         runningAgentIds={runningAgentIds}
         onResumeAgent={handleResumeAgent}
         onStopAgent={handleStopAgent}
+        onDismissAgent={handleDismissAgent}
       />
       {showNewAgentDialog && (
         <NewAgentDialog

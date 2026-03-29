@@ -37,6 +37,8 @@ interface RunningAgent {
   stuckCheckInterval: ReturnType<typeof setInterval> | null
   /** Timestamp (ms) when the current step started. Used for step timing logs. */
   stepStartedAt: number
+  /** Per-agent approval mode override. When set, takes priority over the global default. */
+  approvalModeOverride: ApprovalMode | null
 }
 
 /**
@@ -218,9 +220,23 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.tryDequeue()
   }
 
-  /** Update the approval mode for new permission requests. */
+  /** Update the global approval mode for new permission requests. */
   setApprovalMode(mode: ApprovalMode): void {
     this.approvalMode = mode
+  }
+
+  /** Set a per-agent approval mode override. Pass null to revert to the global default. */
+  setAgentApprovalMode(agentId: string, mode: ApprovalMode | null): void {
+    const entry = this.running.get(agentId)
+    if (entry) {
+      entry.approvalModeOverride = mode
+    }
+  }
+
+  /** Get the effective approval mode for an agent (per-agent override or global default). */
+  getAgentApprovalMode(agentId: string): ApprovalMode {
+    const entry = this.running.get(agentId)
+    return entry?.approvalModeOverride ?? this.approvalMode
   }
 
   /** Abort all running agent loops and clear the queue. Called on app quit. */
@@ -252,7 +268,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       lastActivityAt: Date.now(),
       stuckNotified: false,
       stuckCheckInterval: null,
-      stepStartedAt: Date.now()
+      stepStartedAt: Date.now(),
+      approvalModeOverride: null
     }
     this.running.set(agentId, entry)
 
@@ -416,7 +433,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       this.emitStepBanner(agentId, snapshot, phase.name, step.title)
 
       entry.stepStartedAt = Date.now()
-      const ok = await this.runStep(entry, prompt, this.approvalMode, step.title, config)
+      const effectiveApproval = entry.approvalModeOverride ?? this.approvalMode
+      const ok = await this.runStep(entry, prompt, effectiveApproval, step.title, config)
       if (entry.stopped) break
 
       const stepDurationMs = Date.now() - entry.stepStartedAt
