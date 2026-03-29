@@ -390,7 +390,19 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
         .map((block) => (typeof block.text === 'string' ? block.text : ''))
         .join('\n')
     } else {
-      text = JSON.stringify(result, null, 2)
+      const obj = result as Record<string, unknown>
+      // Bash tool results have stdout/stderr fields — extract the output directly
+      if (typeof obj.stdout === 'string' || typeof obj.stderr === 'string') {
+        const parts: string[] = []
+        if (typeof obj.stdout === 'string' && obj.stdout.length > 0) parts.push(obj.stdout)
+        if (typeof obj.stderr === 'string' && obj.stderr.length > 0) parts.push(obj.stderr)
+        text = parts.join('\n')
+      } else if (obj.type === 'text' && typeof (obj as { file?: { content?: string } }).file?.content === 'string') {
+        // Read tool results have { type: 'text', file: { content: '...' } }
+        text = (obj as { file: { content: string } }).file.content
+      } else {
+        text = JSON.stringify(result, null, 2)
+      }
     }
 
     if (text.length > 0) {

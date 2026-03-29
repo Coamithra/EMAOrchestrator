@@ -46,9 +46,13 @@ function ChatTerminal({ agentId }: ChatTerminalProps): React.JSX.Element {
           blocksRef.current = [...blocksRef.current, update.block]
           break
         case 'block:updated': {
-          // Replace the affected block's reference so memo comparators detect the change
+          // Clone the FRESH block from the store — blocksRef may hold a stale clone
+          // from a previous update, so mutations to the store block won't be reflected.
           const idx = update.blockIndex
-          blocksRef.current = blocksRef.current.map((b, i) => (i === idx ? { ...b } : b))
+          const fresh = getBlocks(agentId)[idx]
+          blocksRef.current = blocksRef.current.map((b, i) =>
+            i === idx && fresh ? { ...fresh } : b
+          )
           break
         }
         case 'blocks:reset':

@@ -54,13 +54,10 @@ function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
   )
 }
 
-const ToolBlockView = memo(ToolBlockViewInner, (prev, next) => {
-  return (
-    prev.block.summary === next.block.summary &&
-    prev.block.result === next.block.result &&
-    prev.block.active === next.block.active &&
-    prev.block.elapsedSeconds === next.block.elapsedSeconds
-  )
-})
+// Default memo uses reference equality on props. The ChatTerminal creates a new
+// block reference ({ ...b }) on every block:updated notification, so this correctly
+// triggers re-renders. A custom field comparator breaks because blocks are mutated
+// in place before cloning — both old and new objects end up with identical values.
+const ToolBlockView = memo(ToolBlockViewInner)
 
 export default ToolBlockView
