@@ -553,7 +553,14 @@ describe('OrchestrationLoop', () => {
       // Make session hang
       mockStartSession.mockImplementation(() => new Promise(() => {}))
 
+      // Wait for the async loop to reach runStep (driver created) before stopping
+      const running = new Promise<void>((resolve) => {
+        loop.on('agent:running', () => resolve())
+      })
+
       loop.startAgent(agentId)
+      await running
+
       expect(loop.isRunning(agentId)).toBe(true)
 
       const stopped = new Promise<string>((resolve) => {
@@ -582,7 +589,14 @@ describe('OrchestrationLoop', () => {
       const loop = new OrchestrationLoop(manager)
 
       mockStartSession.mockImplementation(() => new Promise(() => {}))
+
+      // Wait for the async loop to reach runStep (driver created) before aborting
+      const running = new Promise<void>((resolve) => {
+        loop.on('agent:running', () => resolve())
+      })
+
       loop.startAgent(agentId)
+      await running
 
       loop.abortAll()
 
