@@ -37,7 +37,11 @@ export interface PermissionRequest {
   toolName: string
   toolInput: Record<string, unknown>
   toolUseId: string
+  /** Full permission prompt sentence (e.g. "Claude wants to read foo.txt"). */
   title?: string
+  /** Short noun phrase for the action (e.g. "Read file"). */
+  displayName?: string
+  /** Human-readable subtitle about scope/access. */
   description?: string
 }
 
@@ -128,6 +132,12 @@ export interface ToolSummaryEvent {
   summary: string
 }
 
+/** Emitted when a tool execution completes with its actual output. */
+export interface ToolResultEvent {
+  toolUseId: string
+  result: string
+}
+
 /** Emitted by the orchestration loop before each step prompt. */
 export interface StepBannerEvent {
   phaseIndex: number
@@ -154,6 +164,7 @@ export type CliDriverEvents = {
   'tool:start': (event: ToolStartEvent) => void
   'tool:activity': (event: ToolActivityEvent) => void
   'tool:summary': (event: ToolSummaryEvent) => void
+  'tool:result': (event: ToolResultEvent) => void
   'approval:status': (event: ApprovalStatusEvent) => void
   'permission:request': (request: PermissionRequest) => void
   'security:alert': (request: SecurityAlertRequest) => void

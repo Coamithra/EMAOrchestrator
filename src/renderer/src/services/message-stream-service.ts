@@ -72,9 +72,25 @@ function getLastToolBlock(agentId: string): ToolBlock | null {
   return null
 }
 
+/** Mark the last tool block as inactive if it's still running. Safety net for missing tool:summary. */
+function finalizeToolBlock(agentId: string): void {
+  const tool = getLastToolBlock(agentId)
+  if (tool && tool.active) {
+    tool.active = false
+    const store = getStore(agentId)
+    const idx = store.lastIndexOf(tool)
+    if (idx !== -1) notify(agentId, { type: 'block:updated', blockIndex: idx })
+  }
+}
+
 function finalizeTextBlock(agentId: string): void {
   const open = getOpenTextBlock(agentId)
-  if (open) open.streaming = false
+  if (open) {
+    open.streaming = false
+    const store = getStore(agentId)
+    const idx = store.lastIndexOf(open)
+    if (idx !== -1) notify(agentId, { type: 'block:updated', blockIndex: idx })
+  }
 }
 
 function blockId(): string {
@@ -146,6 +162,7 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
 
   switch (event.type) {
     case 'stream:text': {
+      finalizeToolBlock(agentId)
       bufferText(agentId, event.data.text)
       break
     }
@@ -177,6 +194,7 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
     case 'tool:start': {
       flushMdBuffer(agentId)
       finalizeTextBlock(agentId)
+      finalizeToolBlock(agentId)
       appendBlock(agentId, {
         type: 'tool',
         id: blockId(),
@@ -212,9 +230,21 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
       break
     }
 
+    case 'tool:result': {
+      const tool = getLastToolBlock(agentId)
+      if (tool) {
+        tool.result = event.data.result
+        const store = getStore(agentId)
+        const idx = store.lastIndexOf(tool)
+        if (idx !== -1) notify(agentId, { type: 'block:updated', blockIndex: idx })
+      }
+      break
+    }
+
     case 'session:result': {
       flushMdBuffer(agentId)
       finalizeTextBlock(agentId)
+      finalizeToolBlock(agentId)
       appendBlock(agentId, {
         type: 'result',
         id: blockId(),
@@ -244,6 +274,7 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
     case 'assistant:message': {
       flushMdBuffer(agentId)
       finalizeTextBlock(agentId)
+      finalizeToolBlock(agentId)
       break
     }
 

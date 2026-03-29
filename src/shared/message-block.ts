@@ -32,8 +32,10 @@ export interface ToolBlock extends BaseBlock {
   type: 'tool'
   toolName: string
   inputSummary: string
-  /** Populated when tool:summary arrives. */
+  /** Condensed summary from the SDK's tool_use_summary message. */
   summary?: string
+  /** Actual tool output from the SDK's user message (tool_use_result). */
+  result?: string
   /** True while tool is executing (tool:activity events update elapsed). */
   active: boolean
   elapsedSeconds: number

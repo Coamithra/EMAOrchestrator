@@ -894,6 +894,9 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     driver.on('tool:summary', (event) => {
       push({ type: 'tool:summary', data: event })
     })
+    driver.on('tool:result', (event) => {
+      push({ type: 'tool:result', data: event })
+    })
     driver.on('approval:status', (event) => {
       push({ type: 'approval:status', data: event })
     })

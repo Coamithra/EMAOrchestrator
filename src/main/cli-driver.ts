@@ -285,7 +285,11 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
           })
           break
 
-        // user, status, etc. — silently consumed for now
+        case 'user':
+          this.handleUserMessage(message)
+          break
+
+        // status, etc. — silently consumed for now
       }
     }
 
@@ -364,11 +368,41 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     this.emit('assistant:message', parsed)
   }
 
+  private handleUserMessage(message: SDKMessage & { type: 'user' }): void {
+    // Extract tool result text from the user message (contains actual tool output)
+    const result = (message as { tool_use_result?: unknown }).tool_use_result
+    if (result == null) return
+
+    // The message.message.content may contain tool_result blocks with tool_use_id
+    const content = (message as { message?: { content?: unknown[] } }).message?.content
+    const contentArr = Array.isArray(content) ? (content as Record<string, unknown>[]) : []
+    const toolResultBlock = contentArr.find((block) => block.type === 'tool_result')
+    const toolUseId = (toolResultBlock?.tool_use_id as string) ?? ''
+
+    // Flatten the result to a string
+    let text: string
+    if (typeof result === 'string') {
+      text = result
+    } else if (Array.isArray(result)) {
+      const resultArr = result as Record<string, unknown>[]
+      text = resultArr
+        .filter((block) => block.type === 'text')
+        .map((block) => (typeof block.text === 'string' ? block.text : ''))
+        .join('\n')
+    } else {
+      text = JSON.stringify(result, null, 2)
+    }
+
+    if (text.length > 0) {
+      this.emit('tool:result', { toolUseId, result: text })
+    }
+  }
+
   private createCanUseToolCallback(sessionOptions: CliSessionOptions) {
     return async (
       toolName: string,
       input: Record<string, unknown>,
-      options: { signal: AbortSignal; toolUseID: string; title?: string; description?: string }
+      options: { signal: AbortSignal; toolUseID: string; title?: string; displayName?: string; description?: string }
     ): Promise<PermissionResult> => {
       const mode = sessionOptions.approvalMode ?? 'never'
       const inputSummary = summarizeToolInput(toolName, input)
@@ -455,6 +489,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
         toolInput: input,
         toolUseId: options.toolUseID,
         title: options.title,
+        displayName: options.displayName,
         description: options.description
       }
       this.emit('permission:request', request)

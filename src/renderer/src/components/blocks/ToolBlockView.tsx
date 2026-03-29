@@ -5,10 +5,20 @@ interface ToolBlockViewProps {
   block: ToolBlock
 }
 
+/** Max characters to show in the expanded tool result before truncating. */
+const MAX_RESULT_LENGTH = 5000
+
 function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const isBash = block.toolName.toLowerCase() === 'bash'
-  const hasSummary = block.summary && block.summary.length > 0
+
+  // Prefer actual result over condensed summary
+  const detail = block.result ?? block.summary
+  const hasDetail = detail != null && detail.length > 0
+  const truncated =
+    hasDetail && detail.length > MAX_RESULT_LENGTH
+      ? detail.slice(0, MAX_RESULT_LENGTH) + '\n… (truncated)'
+      : detail
 
   return (
     <div className="block-tool">
@@ -35,8 +45,10 @@ function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
         )}
       </div>
 
-      {expanded && hasSummary && (
-        <div className="block-tool__detail">{block.summary}</div>
+      {expanded && (
+        <div className="block-tool__detail">
+          {hasDetail ? truncated : <span className="block-tool__no-output">No output</span>}
+        </div>
       )}
     </div>
   )
@@ -45,6 +57,7 @@ function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
 const ToolBlockView = memo(ToolBlockViewInner, (prev, next) => {
   return (
     prev.block.summary === next.block.summary &&
+    prev.block.result === next.block.result &&
     prev.block.active === next.block.active &&
     prev.block.elapsedSeconds === next.block.elapsedSeconds
   )

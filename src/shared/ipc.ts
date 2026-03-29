@@ -14,6 +14,7 @@ import type {
   ToolStartEvent,
   ToolActivityEvent,
   ToolSummaryEvent,
+  ToolResultEvent,
   StepBannerEvent,
   ApprovalStatusEvent
 } from './cli-driver'
@@ -105,6 +106,7 @@ export type CliEvent =
   | { type: 'tool:start'; data: ToolStartEvent }
   | { type: 'tool:activity'; data: ToolActivityEvent }
   | { type: 'tool:summary'; data: ToolSummaryEvent }
+  | { type: 'tool:result'; data: ToolResultEvent }
   | { type: 'permission:request'; data: PermissionRequest }
   | { type: 'security:alert'; data: SecurityAlertRequest }
   | { type: 'user:question'; data: UserQuestionRequest }

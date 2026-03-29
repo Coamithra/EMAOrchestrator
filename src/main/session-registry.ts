@@ -51,6 +51,10 @@ function wireEvents(sessionId: string, driver: CliDriver): void {
     pushEvent({ sessionId, event: { type: 'tool:summary', data: event } })
   })
 
+  driver.on('tool:result', (event) => {
+    pushEvent({ sessionId, event: { type: 'tool:result', data: event } })
+  })
+
   driver.on('assistant:message', (content) => {
     pushEvent({ sessionId, event: { type: 'assistant:message', data: content } })
   })
