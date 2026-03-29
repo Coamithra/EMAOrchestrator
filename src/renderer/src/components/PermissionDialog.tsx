@@ -7,11 +7,25 @@ interface PermissionDialogProps {
   onRespond: (response: PermissionResponse) => void
 }
 
-function formatToolInput(input: Record<string, unknown>): string {
+/** Extract known fields for nice display; return remaining fields as overflow. */
+function extractToolFields(input: Record<string, unknown>): {
+  command?: string
+  description?: string
+  overflow: Record<string, unknown> | null
+} {
+  const { command, description, ...rest } = input
+  return {
+    command: typeof command === 'string' ? command : undefined,
+    description: typeof description === 'string' ? description : undefined,
+    overflow: Object.keys(rest).length > 0 ? rest : null
+  }
+}
+
+function formatOverflow(obj: Record<string, unknown>): string {
   try {
-    return JSON.stringify(input, null, 2)
+    return JSON.stringify(obj, null, 2)
   } catch {
-    return String(input)
+    return String(obj)
   }
 }
 
@@ -42,10 +56,14 @@ function PermissionDialog({ request, onRespond }: PermissionDialogProps): React.
         </div>
 
         <div className="interaction-dialog__body">
+          {request.title && (
+            <div className="permission-dialog__title-text">{request.title}</div>
+          )}
+
           <div className="permission-dialog__field">
             <span className="permission-dialog__label">Tool</span>
             <span className="permission-dialog__value permission-dialog__tool-name">
-              {request.toolName}
+              {request.displayName ?? request.toolName}
             </span>
           </div>
 
@@ -56,10 +74,38 @@ function PermissionDialog({ request, onRespond }: PermissionDialogProps): React.
             </div>
           )}
 
-          <div className="permission-dialog__field permission-dialog__field--vertical">
-            <span className="permission-dialog__label">Input</span>
-            <pre className="permission-dialog__input-json">{formatToolInput(request.toolInput)}</pre>
-          </div>
+          {(() => {
+            const { command, description, overflow } = extractToolFields(request.toolInput)
+            return (
+              <>
+                {description && (
+                  <div className="permission-dialog__description">{description}</div>
+                )}
+                {command && (
+                  <div className="permission-dialog__field permission-dialog__field--vertical">
+                    <span className="permission-dialog__label">Command</span>
+                    <pre className="permission-dialog__command">{command}</pre>
+                  </div>
+                )}
+                {!command && !overflow && !description && (
+                  <div className="permission-dialog__field permission-dialog__field--vertical">
+                    <span className="permission-dialog__label">Input</span>
+                    <span className="permission-dialog__value permission-dialog__empty-input">
+                      No input
+                    </span>
+                  </div>
+                )}
+                {overflow && (
+                  <div className="permission-dialog__field permission-dialog__field--vertical">
+                    <span className="permission-dialog__label">Details</span>
+                    <pre className="permission-dialog__input-json">
+                      {formatOverflow(overflow)}
+                    </pre>
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
 
         <div className="interaction-dialog__actions">

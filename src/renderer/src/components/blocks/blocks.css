@@ -251,9 +251,8 @@
 
 .block-tool__summary-inline {
   color: var(--ev-c-text-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  word-break: break-all;
   flex: 1;
   min-width: 0;
 }

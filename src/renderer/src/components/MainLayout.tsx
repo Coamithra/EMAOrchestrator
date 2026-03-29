@@ -11,12 +11,14 @@ const MAX_SIDEBAR_WIDTH = 480
 interface MainLayoutProps {
   agents: AgentSnapshot[]
   runningAgentIds: Set<string>
+  /** When set, auto-selects this agent (e.g. after creation). Cleared after consumption. */
+  pendingSelectAgentId: string | null
   onResumeAgent: (agentId: string) => void
   onStopAgent: (agentId: string) => void
   onDismissAgent: (agentId: string) => void
 }
 
-function MainLayout({ agents, runningAgentIds, onResumeAgent, onStopAgent, onDismissAgent }: MainLayoutProps): React.JSX.Element {
+function MainLayout({ agents, runningAgentIds, pendingSelectAgentId, onResumeAgent, onStopAgent, onDismissAgent }: MainLayoutProps): React.JSX.Element {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -24,6 +26,13 @@ function MainLayout({ agents, runningAgentIds, onResumeAgent, onStopAgent, onDis
   const dragStartWidth = useRef(0)
   const sidebarWidthRef = useRef(sidebarWidth)
   sidebarWidthRef.current = sidebarWidth
+
+  // Auto-select a newly created agent
+  useEffect(() => {
+    if (pendingSelectAgentId && agents.some((a) => a.id === pendingSelectAgentId)) {
+      setSelectedAgentId(pendingSelectAgentId)
+    }
+  }, [pendingSelectAgentId, agents])
 
   // Clear stale selection when the selected agent disappears from the list
   useEffect(() => {

@@ -194,26 +194,52 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
     case 'tool:start': {
       flushMdBuffer(agentId)
       finalizeTextBlock(agentId)
-      finalizeToolBlock(agentId)
-      appendBlock(agentId, {
-        type: 'tool',
-        id: blockId(),
-        toolName: event.data.toolName,
-        inputSummary: event.data.inputSummary,
-        active: true,
-        elapsedSeconds: 0,
-        timestamp: Date.now()
-      })
+      // If tool:activity already created a block (SDK yields tool_progress before
+      // the assistant message), backfill the inputSummary instead of creating a
+      // duplicate block.
+      const existingTool = getLastToolBlock(agentId)
+      if (existingTool && !existingTool.inputSummary) {
+        existingTool.inputSummary = event.data.inputSummary
+        const store = getStore(agentId)
+        const idx = store.lastIndexOf(existingTool)
+        if (idx !== -1) notify(agentId, { type: 'block:updated', blockIndex: idx })
+      } else {
+        finalizeToolBlock(agentId)
+        appendBlock(agentId, {
+          type: 'tool',
+          id: blockId(),
+          toolName: event.data.toolName,
+          inputSummary: event.data.inputSummary,
+          active: true,
+          elapsedSeconds: 0,
+          timestamp: Date.now()
+        })
+      }
       break
     }
 
     case 'tool:activity': {
-      const tool = getLastToolBlock(agentId)
+      let tool = getLastToolBlock(agentId)
       if (tool && tool.active) {
         tool.elapsedSeconds = event.data.elapsedSeconds
         const store = getStore(agentId)
         const idx = store.lastIndexOf(tool)
         if (idx !== -1) notify(agentId, { type: 'block:updated', blockIndex: idx })
+      } else {
+        // tool_progress arrived before the assistant message — create the
+        // tool block now so the pulse indicator is visible during execution.
+        flushMdBuffer(agentId)
+        finalizeTextBlock(agentId)
+        finalizeToolBlock(agentId)
+        appendBlock(agentId, {
+          type: 'tool',
+          id: blockId(),
+          toolName: event.data.toolName,
+          inputSummary: '',
+          active: true,
+          elapsedSeconds: event.data.elapsedSeconds,
+          timestamp: Date.now()
+        })
       }
       break
     }
@@ -274,7 +300,9 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
     case 'assistant:message': {
       flushMdBuffer(agentId)
       finalizeTextBlock(agentId)
-      finalizeToolBlock(agentId)
+      // Do NOT finalizeToolBlock here — the tool is still running when the
+      // assistant message arrives. The tool block is finalized by tool:summary,
+      // tool:result, or the next stream:text / tool:start event.
       break
     }
 

@@ -17,6 +17,7 @@ function App(): React.JSX.Element {
   const [agents, setAgents] = useState<AgentSnapshot[]>([])
   const [runningAgentIds, setRunningAgentIds] = useState<Set<string>>(new Set())
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false)
+  const [pendingSelectAgentId, setPendingSelectAgentId] = useState<string | null>(null)
 
   // Initialize message stream early so it captures events for all agents,
   // even before any ChatTerminal is mounted. Runs once on app startup.
@@ -186,6 +187,7 @@ function App(): React.JSX.Element {
 
   const handleAgentCreated = useCallback(async (agentId: string) => {
     setShowNewAgentDialog(false)
+    setPendingSelectAgentId(agentId)
     try {
       await window.api.startOrchestration(agentId)
     } catch {
@@ -265,6 +267,7 @@ function App(): React.JSX.Element {
       <MainLayout
         agents={agents}
         runningAgentIds={runningAgentIds}
+        pendingSelectAgentId={pendingSelectAgentId}
         onResumeAgent={handleResumeAgent}
         onStopAgent={handleStopAgent}
         onDismissAgent={handleDismissAgent}

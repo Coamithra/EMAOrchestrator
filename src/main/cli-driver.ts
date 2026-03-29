@@ -55,10 +55,9 @@ export function summarizeToolInput(toolName: string, input: Record<string, unkno
     return input.pattern
   }
 
-  // Bash — show first 80 chars of the command
+  // Bash — show the full command
   if (name === 'bash' && input.command && typeof input.command === 'string') {
-    const cmd = input.command.length > 80 ? input.command.slice(0, 77) + '...' : input.command
-    return cmd
+    return input.command
   }
 
   // Agent tool — show the description or prompt start

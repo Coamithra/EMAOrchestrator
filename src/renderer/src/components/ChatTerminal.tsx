@@ -20,7 +20,11 @@ function ChatTerminal({ agentId }: ChatTerminalProps): React.JSX.Element {
     const el = scrollRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30
-    autoScrollRef.current = atBottom
+    if (autoScrollRef.current !== atBottom) {
+      autoScrollRef.current = atBottom
+      // Force re-render so the jump button appears/disappears immediately
+      setVersion((v) => v + 1)
+    }
   }, [])
 
   const scrollToBottom = useCallback(() => {

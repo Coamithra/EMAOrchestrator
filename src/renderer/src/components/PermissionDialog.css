@@ -2,6 +2,13 @@
 
 /* Permission-specific styles */
 
+.permission-dialog__title-text {
+  font-size: 14px;
+  color: var(--ev-c-text-1);
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
 .permission-dialog__icon {
   color: #facc15;
 }
@@ -52,6 +59,35 @@
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.permission-dialog__description {
+  font-size: 13px;
+  color: var(--ev-c-text-2);
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.permission-dialog__command {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  line-height: 1.5;
+  color: var(--ev-c-text-1);
+  background: var(--color-background-mute);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 4px;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.permission-dialog__empty-input {
+  font-style: italic;
+  color: var(--ev-c-text-3);
 }
 
 .interaction-dialog__btn--remember {
