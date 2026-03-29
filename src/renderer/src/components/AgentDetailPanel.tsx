@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { AgentSnapshot } from '@shared/agent-manager'
 import type { PermissionRequest, PermissionResponse, SecurityAlertRequest, SecurityAlertResponse, UserQuestionRequest, UserQuestionResponse } from '@shared/cli-driver'
 import type { CliEventPayload } from '@shared/ipc'
-import TerminalView from './TerminalView'
+import ChatTerminal from './ChatTerminal'
 import StepProgress from './StepProgress'
 import PermissionDialog from './PermissionDialog'
 import SecurityAlertDialog from './SecurityAlertDialog'
@@ -227,7 +227,7 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
           />
         </div>
         <div className="agent-detail-panel__terminal">
-          <TerminalView agentId={agent.id} />
+          <ChatTerminal agentId={agent.id} />
           {isRunning && pendingPermission && (
             <PermissionDialog
               key={pendingPermission.requestId}

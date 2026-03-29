@@ -375,8 +375,10 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
 
       // Auto-approve everything
       if (mode === 'always') {
-        this.emit('stream:text', {
-          text: `\x1b[2m[auto-approved] ${toolName}: ${inputSummary}\x1b[0m\r\n`
+        this.emit('approval:status', {
+          variant: 'auto-approved',
+          toolName,
+          inputSummary
         })
         return { behavior: 'allow' }
       }
@@ -391,8 +393,10 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
             currentStepTitle: sessionOptions.currentStepTitle
           })
           if (result.decision === 'yes') {
-            this.emit('stream:text', {
-              text: `\x1b[32m[smart-approved] ${toolName}: ${inputSummary}\x1b[0m\r\n`
+            this.emit('approval:status', {
+              variant: 'smart-approved',
+              toolName,
+              inputSummary
             })
             return { behavior: 'allow' }
           }

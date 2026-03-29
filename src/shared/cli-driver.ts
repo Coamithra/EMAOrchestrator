@@ -128,6 +128,23 @@ export interface ToolSummaryEvent {
   summary: string
 }
 
+/** Emitted by the orchestration loop before each step prompt. */
+export interface StepBannerEvent {
+  phaseIndex: number
+  totalPhases: number
+  stepIndex: number
+  totalSteps: number | string
+  phaseName: string
+  stepTitle: string
+}
+
+/** Emitted when a tool call is auto-approved or smart-approved. */
+export interface ApprovalStatusEvent {
+  variant: 'auto-approved' | 'smart-approved'
+  toolName: string
+  inputSummary: string
+}
+
 /** Typed event map for the CliDriver. */
 export type CliDriverEvents = {
   'state:changed': (state: CliDriverState, previousState: CliDriverState) => void
@@ -137,6 +154,7 @@ export type CliDriverEvents = {
   'tool:start': (event: ToolStartEvent) => void
   'tool:activity': (event: ToolActivityEvent) => void
   'tool:summary': (event: ToolSummaryEvent) => void
+  'approval:status': (event: ApprovalStatusEvent) => void
   'permission:request': (request: PermissionRequest) => void
   'security:alert': (request: SecurityAlertRequest) => void
   'user:question': (request: UserQuestionRequest) => void
