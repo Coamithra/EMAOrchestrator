@@ -35,7 +35,7 @@ function ChatTerminal({ agentId }: ChatTerminalProps): React.JSX.Element {
 
   useEffect(() => {
     // Load existing blocks for this agent (replay on mount / agent switch)
-    blocksRef.current = [...getBlocks(agentId)]
+    blocksRef.current = getBlocks(agentId).map((b) => ({ ...b }))
     autoScrollRef.current = true
     setVersion((v) => v + 1)
 
@@ -59,7 +59,7 @@ function ChatTerminal({ agentId }: ChatTerminalProps): React.JSX.Element {
           break
         }
         case 'blocks:reset':
-          blocksRef.current = [...getBlocks(agentId)]
+          blocksRef.current = getBlocks(agentId).map((b) => ({ ...b }))
           break
       }
       setVersion((v) => v + 1)
