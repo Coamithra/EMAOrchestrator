@@ -85,6 +85,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_SET_AGENT_APPROVAL, agentId, mode),
   getAgentApprovalMode: (agentId: string): Promise<string> =>
     ipcRenderer.invoke(IpcChannels.ORCHESTRATION_GET_AGENT_APPROVAL, agentId),
+  sendDirectPrompt: (agentId: string, prompt: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.ORCHESTRATION_SEND_DIRECT_PROMPT, agentId, prompt),
 
   // Trello
   getTrelloLists: (): Promise<unknown> => ipcRenderer.invoke(IpcChannels.TRELLO_GET_LISTS),

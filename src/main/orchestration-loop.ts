@@ -239,6 +239,63 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     return entry?.approvalModeOverride ?? this.approvalMode
   }
 
+  /**
+   * Send a direct user prompt to an agent, bypassing runbook execution.
+   * If the agent is currently running a step, it is stopped first.
+   * After the prompt completes, the agent stays paused — Resume continues the runbook.
+   */
+  async sendDirectPrompt(agentId: string, prompt: string): Promise<void> {
+    // Stop the agent if it's currently running a runbook step
+    if (this.running.has(agentId)) {
+      this.stopAgent(agentId)
+    }
+
+    const agent = this.agentManager.getAgent(agentId)
+    if (!agent) throw new Error(`Unknown agent: ${agentId}`)
+
+    const config = await loadConfig()
+    const cwd = config?.targetRepoPath || agent.worktree.path
+
+    const driver = new CliDriver()
+    this.wireDriverToRenderer(agentId, driver)
+
+    const effectiveApproval = this.approvalMode
+
+    // Capture new session ID so resume preserves conversation context
+    driver.on('session:init', (info) => {
+      this.agentManager.setSessionId(agentId, info.sessionId)
+    })
+
+    return new Promise<void>((resolve, reject) => {
+      driver.on('session:result', () => resolve())
+      driver.on('error', (err) => reject(err))
+
+      // Emit a banner so the user sees this is a direct prompt, not a runbook step
+      const renderSessionId = `orchestration-${agentId}`
+      const win = BrowserWindow.getAllWindows()[0]
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('cli:event', {
+          sessionId: renderSessionId,
+          event: {
+            type: 'stream:text' as const,
+            data: { text: '\n--- Direct prompt ---\n' }
+          }
+        } satisfies CliEventPayload)
+      }
+
+      driver
+        .startSession({
+          prompt,
+          cwd,
+          sessionId: agent.sessionId ?? undefined,
+          settingSources: ['user', 'project', 'local'],
+          approvalMode: effectiveApproval,
+          worktreePath: agent.worktree.path
+        })
+        .catch(reject)
+    })
+  }
+
   /** Abort all running agent loops and clear the queue. Called on app quit. */
   abortAll(): void {
     this.queued.length = 0

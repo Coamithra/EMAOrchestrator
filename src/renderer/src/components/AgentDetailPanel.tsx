@@ -7,6 +7,7 @@ import StepProgress from './StepProgress'
 import PermissionDialog from './PermissionDialog'
 import SecurityAlertDialog from './SecurityAlertDialog'
 import QuestionDialog from './QuestionDialog'
+import ConsoleInput from './ConsoleInput'
 import type { PhaseInfo } from './StepProgress'
 import './AgentDetailPanel.css'
 
@@ -228,6 +229,13 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
         </div>
         <div className="agent-detail-panel__terminal">
           <ChatTerminal agentId={agent.id} />
+          <ConsoleInput
+            agentId={agent.id}
+            disabled={
+              agent.stateSnapshot.state === 'done' ||
+              agent.stateSnapshot.state === 'waiting_for_human'
+            }
+          />
           {isRunning && pendingPermission && (
             <PermissionDialog
               key={pendingPermission.requestId}

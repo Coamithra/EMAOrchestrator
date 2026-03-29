@@ -217,7 +217,8 @@ Central controller that drives agents through runbook steps. One async loop per 
 - **Events:** Emits `agent:running`, `agent:queued`, `agent:dequeued`, `agent:completed`, `agent:errored`, `agent:stopped`, `agent:stuck`.
 - **Renderer forwarding:** All CliDriver events are forwarded to the renderer via `cli:event` channel using session ID `orchestration-<agentId>`.
 - **Shared types:** `src/shared/orchestration-loop.ts` defines `OrchestrationLoopEvents` and `ConcurrencyStatus`.
-- **IPC channels:** `orchestration:start`, `orchestration:stop`, `orchestration:respondPermission`, `orchestration:respondQuestion`, `orchestration:isRunning`, `orchestration:getConcurrencyStatus`.
+- **Direct prompt:** `sendDirectPrompt(agentId, prompt)` lets the user bypass runbook execution and send an arbitrary prompt to an agent. If the agent is currently running a step, it is stopped first. The prompt is sent as a standalone CLI session using the agent's existing SDK session ID (preserving conversation context). After completion, the agent stays in its current phase state — Resume continues the runbook. The new session ID is captured so future steps resume the same conversation. Output is wired to the renderer via the same `orchestration-<agentId>` channel.
+- **IPC channels:** `orchestration:start`, `orchestration:stop`, `orchestration:respondPermission`, `orchestration:respondQuestion`, `orchestration:isRunning`, `orchestration:getConcurrencyStatus`, `orchestration:sendDirectPrompt`.
 
 ### IPC Bridge (`src/shared/ipc.ts`)
 
@@ -248,6 +249,7 @@ Main panel for viewing a selected agent's state and output. Composes two sub-com
 - **Sidebar notification:** A pulsing "!" badge appears on sidebar agent items when `stateSnapshot.state === 'waiting_for_human'`.
 - **`AgentSnapshot.runbook`:** The full `Runbook` is included in `AgentSnapshot` so the renderer has phase/step names without an extra IPC call.
 - **`pendingHumanInteraction` sync:** `AgentManager.setPendingHumanInteraction()` emits `agent:interaction-changed` which is forwarded to the renderer via `agent:event` IPC. `App.tsx` handles this event to keep `pendingHumanInteraction` in sync. Additionally, `App.tsx` clears `pendingHumanInteraction` to `null` on `agent:state-changed` events when the new state is not `waiting_for_human`. The `PendingHumanInteraction` type includes optional `permissionRequest` / `questionRequest` / `securityAlertRequest` fields storing the full request data for rich dialog seeding after agent switch or app reload. The `type` field has three values: `'permission'`, `'question'`, and `'security_alert'`.
+- **`ConsoleInput`** (`src/renderer/src/components/ConsoleInput.tsx`) — Text input bar below the ChatTerminal for sending direct prompts to an agent. Enter submits, Shift+Enter for newline. Auto-resizes up to 120px. Calls `sendDirectPrompt(agentId, prompt)` via IPC. Disabled when agent is done or waiting for human input (permission/question dialog). Shows a sending state while the prompt is being processed.
 
 ### New Agent Dialog (`src/renderer/src/components/NewAgentDialog.tsx`)
 

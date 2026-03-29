@@ -336,6 +336,13 @@ export function registerIpcHandlers(
     }
   )
 
+  ipcMain.handle(
+    IpcChannels.ORCHESTRATION_SEND_DIRECT_PROMPT,
+    async (_event, agentId: string, prompt: string) => {
+      await requireOrchestration(orchestrationLoop).sendDirectPrompt(agentId, prompt)
+    }
+  )
+
   // ---------------------------------------------------------------------------
   // Trello
   // ---------------------------------------------------------------------------

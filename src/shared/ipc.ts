@@ -73,6 +73,7 @@ export const IpcChannels = {
   ORCHESTRATION_GET_CONCURRENCY_STATUS: 'orchestration:getConcurrencyStatus',
   ORCHESTRATION_SET_AGENT_APPROVAL: 'orchestration:setAgentApproval',
   ORCHESTRATION_GET_AGENT_APPROVAL: 'orchestration:getAgentApproval',
+  ORCHESTRATION_SEND_DIRECT_PROMPT: 'orchestration:sendDirectPrompt',
 
   // Agent events (main → renderer push)
   AGENT_EVENT: 'agent:event',
@@ -189,6 +190,7 @@ export interface OrchestrationAPI {
   getConcurrencyStatus(): Promise<ConcurrencyStatus>
   setAgentApprovalMode(agentId: string, mode: ApprovalMode | null): Promise<void>
   getAgentApprovalMode(agentId: string): Promise<ApprovalMode>
+  sendDirectPrompt(agentId: string, prompt: string): Promise<void>
 }
 
 /** Agent creation API exposed to the renderer. */
