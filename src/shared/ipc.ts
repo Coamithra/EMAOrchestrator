@@ -13,7 +13,9 @@ import type {
   AssistantContent,
   ToolStartEvent,
   ToolActivityEvent,
-  ToolSummaryEvent
+  ToolSummaryEvent,
+  StepBannerEvent,
+  ApprovalStatusEvent
 } from './cli-driver'
 import type { WorktreeInfo } from './worktree'
 import type { AgentSnapshot } from './agent-manager'
@@ -104,6 +106,8 @@ export type CliEvent =
   | { type: 'security:alert'; data: SecurityAlertRequest }
   | { type: 'user:question'; data: UserQuestionRequest }
   | { type: 'session:result'; data: SessionResult }
+  | { type: 'step:banner'; data: StepBannerEvent }
+  | { type: 'approval:status'; data: ApprovalStatusEvent }
   | { type: 'error'; data: { message: string } }
 
 /** Payload shape for the cli:event channel. */

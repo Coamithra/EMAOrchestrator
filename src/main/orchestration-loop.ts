@@ -714,7 +714,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     this.emit('agent:errored', agentId, message)
   }
 
-  /** Push an ANSI-styled step banner to the renderer terminal. */
+  /** Push a structured step banner to the renderer. */
   private emitStepBanner(
     agentId: string,
     snapshot: { phaseIndex: number; totalPhases: number; stepIndex: number },
@@ -727,16 +727,20 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
     const totalSteps =
       this.agentManager.getRunbook(agentId)?.phases[snapshot.phaseIndex]?.steps.length ?? '?'
-    const label =
-      `Phase ${snapshot.phaseIndex + 1}/${snapshot.totalPhases}: ${phaseName}` +
-      ` — Step ${snapshot.stepIndex + 1}/${totalSteps}: ${stepTitle}`
-
-    // Bold magenta banner with horizontal rules
-    const banner = `\r\n\x1b[1;35m${'━'.repeat(3)} ${label} ${'━'.repeat(3)}\x1b[0m\r\n\r\n`
 
     win.webContents.send('cli:event', {
       sessionId,
-      event: { type: 'stream:text' as const, data: { text: banner } }
+      event: {
+        type: 'step:banner' as const,
+        data: {
+          phaseIndex: snapshot.phaseIndex,
+          totalPhases: snapshot.totalPhases,
+          stepIndex: snapshot.stepIndex,
+          totalSteps,
+          phaseName,
+          stepTitle
+        }
+      }
     } satisfies CliEventPayload)
   }
 
@@ -871,6 +875,9 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     })
     driver.on('tool:summary', (event) => {
       push({ type: 'tool:summary', data: event })
+    })
+    driver.on('approval:status', (event) => {
+      push({ type: 'approval:status', data: event })
     })
     driver.on('assistant:message', (content) => {
       push({ type: 'assistant:message', data: content })

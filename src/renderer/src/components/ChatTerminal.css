@@ -1,0 +1,71 @@
+/* ---------------------------------------------------------------------------
+ * ChatTerminal — block-based chat terminal
+ * --------------------------------------------------------------------------- */
+
+.chat-terminal {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--ev-c-black);
+  overflow: hidden;
+}
+
+.chat-terminal__scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+  scroll-behavior: auto;
+}
+
+/* Custom scrollbar to match terminal aesthetic */
+.chat-terminal__scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-terminal__scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-terminal__scroll-area::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+.chat-terminal__scroll-area::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Empty state */
+.chat-terminal__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ev-c-text-3);
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+/* Jump-to-bottom button */
+.chat-terminal__jump-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  color: var(--ev-c-text-2);
+  cursor: pointer;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  padding: 4px 14px;
+  transition: background 0.15s;
+  z-index: 5;
+}
+
+.chat-terminal__jump-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--ev-c-text-1);
+}

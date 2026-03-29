@@ -1,0 +1,372 @@
+/* ---------------------------------------------------------------------------
+ * Shared block styles
+ * --------------------------------------------------------------------------- */
+
+.block {
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ev-c-text-1);
+  padding: 0 12px;
+}
+
+/* ---------------------------------------------------------------------------
+ * TextBlock — markdown content
+ * --------------------------------------------------------------------------- */
+
+.block-text {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.block-text p {
+  margin: 0.4em 0;
+}
+
+.block-text p:first-child {
+  margin-top: 0;
+}
+
+.block-text h1,
+.block-text h2,
+.block-text h3,
+.block-text h4 {
+  color: var(--ev-c-text-1);
+  margin: 0.8em 0 0.4em;
+  font-weight: 600;
+}
+
+.block-text h1 {
+  font-size: 1.3em;
+}
+.block-text h2 {
+  font-size: 1.15em;
+}
+.block-text h3 {
+  font-size: 1.05em;
+}
+
+.block-text ul,
+.block-text ol {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+
+.block-text li {
+  margin: 0.15em 0;
+}
+
+.block-text a {
+  color: #7cc5ff;
+  text-decoration: none;
+}
+
+.block-text a:hover {
+  text-decoration: underline;
+}
+
+.block-text strong {
+  color: var(--ev-c-text-1);
+  font-weight: 600;
+}
+
+.block-text em {
+  font-style: italic;
+  color: var(--ev-c-text-2);
+}
+
+/* Inline code */
+.block-text code:not(pre code) {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  padding: 0.15em 0.35em;
+  font-size: 0.92em;
+  color: #e0c589;
+}
+
+/* Fenced code blocks */
+.block-text__code-wrapper {
+  position: relative;
+  margin: 0.5em 0;
+}
+
+.block-text pre {
+  background: rgba(0, 0, 0, 0.3) !important;
+  border-radius: 6px;
+  padding: 12px 14px !important;
+  margin: 0 !important;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.block-text pre code {
+  background: none !important;
+  padding: 0 !important;
+  font-size: inherit;
+}
+
+.block-text__copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--ev-c-text-3);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.block-text__code-wrapper:hover .block-text__copy-btn {
+  opacity: 1;
+}
+
+.block-text__copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--ev-c-text-1);
+}
+
+/* Streaming cursor */
+.block-text__cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--ev-c-text-2);
+  margin-left: 1px;
+  animation: block-text__blink 1s steps(1) infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes block-text__blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Tables */
+.block-text table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 12.5px;
+}
+
+.block-text th,
+.block-text td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px 10px;
+}
+
+.block-text th {
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+}
+
+/* Blockquotes */
+.block-text blockquote {
+  border-left: 3px solid rgba(255, 255, 255, 0.15);
+  margin: 0.5em 0;
+  padding: 0.2em 0 0.2em 12px;
+  color: var(--ev-c-text-2);
+}
+
+/* Horizontal rules */
+.block-text hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 0.8em 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * BannerBlock — step/phase header
+ * --------------------------------------------------------------------------- */
+
+.block-banner {
+  border-left: 3px solid #c586c0;
+  background: rgba(197, 134, 192, 0.06);
+  padding: 6px 12px;
+  margin: 12px 0 8px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #c586c0;
+}
+
+.block-banner__label {
+  opacity: 0.7;
+  font-weight: 400;
+  margin-right: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+ * ToolBlock — collapsible tool call
+ * --------------------------------------------------------------------------- */
+
+.block-tool {
+  margin: 2px 0;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+.block-tool__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 3px 0;
+  user-select: none;
+}
+
+.block-tool__header:hover {
+  opacity: 0.85;
+}
+
+.block-tool__chevron {
+  font-size: 10px;
+  color: var(--ev-c-text-3);
+  width: 12px;
+  transition: transform 0.15s;
+}
+
+.block-tool__chevron--open {
+  transform: rotate(90deg);
+}
+
+.block-tool__name {
+  font-weight: 600;
+  color: #4ec9b0;
+}
+
+.block-tool__name--bash {
+  color: #6a9955;
+}
+
+.block-tool__prefix {
+  color: #6a9955;
+  font-weight: 600;
+}
+
+.block-tool__summary-inline {
+  color: var(--ev-c-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.block-tool__elapsed {
+  color: var(--ev-c-text-3);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.block-tool__pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ec9b0;
+  animation: block-tool__pulse-anim 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes block-tool__pulse-anim {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.block-tool__detail {
+  padding: 4px 0 6px 18px;
+  color: var(--ev-c-text-2);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.block-tool__input-json {
+  margin-top: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  overflow-x: auto;
+  color: var(--ev-c-text-3);
+}
+
+/* ---------------------------------------------------------------------------
+ * ResultBlock — session stats
+ * --------------------------------------------------------------------------- */
+
+.block-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: #cca84a;
+  border-top: 1px solid rgba(204, 168, 74, 0.2);
+}
+
+.block-result--error {
+  color: #f48771;
+  border-top-color: rgba(244, 135, 113, 0.2);
+}
+
+.block-result__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.block-result__separator {
+  color: rgba(255, 255, 255, 0.15);
+}
+
+/* ---------------------------------------------------------------------------
+ * StatusBlock — approval status
+ * --------------------------------------------------------------------------- */
+
+.block-status {
+  padding: 1px 12px;
+  font-size: 11.5px;
+  margin: 1px 0;
+}
+
+.block-status--auto-approved {
+  color: var(--ev-c-text-3);
+}
+
+.block-status--smart-approved {
+  color: #6a9955;
+}
+
+.block-status__label {
+  font-weight: 500;
+}
+
+/* ---------------------------------------------------------------------------
+ * ErrorBlock
+ * --------------------------------------------------------------------------- */
+
+.block-error {
+  background: rgba(244, 135, 113, 0.1);
+  border-left: 3px solid #f48771;
+  padding: 8px 12px;
+  margin: 6px 0;
+  color: #f48771;
+  font-size: 12.5px;
+}
