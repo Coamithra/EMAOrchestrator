@@ -138,6 +138,11 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       }
     }
 
+    const permLabel = response.behavior === 'allow' ? 'Allowed' : 'Denied'
+    const req = this.agentManager.getAgent(agentId)?.pendingHumanInteraction?.permissionRequest
+    const permDetail = req ? `${req.toolName}` : 'tool call'
+    this.emitOrchestratorInject(agentId, 'permission-response', `${permLabel}: ${permDetail}`)
+
     entry.driver.respondToPermission(response)
     entry.lastActivityAt = Date.now()
     entry.stuckNotified = false
@@ -156,6 +161,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
   async respondToQuestion(agentId: string, response: UserQuestionResponse): Promise<void> {
     const entry = this.running.get(agentId)
     if (!entry?.driver) return // agent was stopped or has no active session
+
+    this.emitOrchestratorInject(agentId, 'question-response', response.answer)
 
     await entry.driver.respondToUserQuestion(response)
     entry.lastActivityAt = Date.now()
@@ -517,132 +524,11 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       }
     }
 
-    // Step loop: run steps until done, error, or stopped
-    while (!entry.stopped) {
-      const state = sm.getState()
-
-      if (state === 'done') {
-        // Clean up tracker doc (fire-and-forget)
-        const doneAgent = this.agentManager.getAgent(agentId)
-        if (doneAgent) {
-          removeTrackerDoc(doneAgent.worktree.path, doneAgent.worktree.branch).catch(() => {})
-        }
-        // Move card to Done and post summary comment (fire-and-forget)
-        this.trelloCompleteCard(agentId).catch(() => {})
-        const agentSnapshot = this.agentManager.getAgent(agentId)
-        this.log(agentId, {
-          event: 'agent_completed',
-          totalDurationMs: Date.now() - agentLoopStartedAt,
-          stepsCompleted: agentSnapshot?.stepHistory.length ?? 0
-        })
-        this.emit('agent:completed', agentId)
-        break
-      }
-      if (state === 'error') {
-        const snap = sm.getSnapshot()
-        this.log(agentId, {
-          event: 'agent_error',
-          error: snap.error ?? 'Unknown error',
-          phaseIndex: snap.phaseIndex,
-          stepIndex: snap.stepIndex
-        })
-        this.emit('agent:errored', agentId, snap.error ?? 'Unknown error')
-        break
-      }
-
-      const snapshot = sm.getSnapshot()
-      if (snapshot.phaseIndex === -1) break
-
-      const runbook = this.agentManager.getRunbook(agentId)
-      if (!runbook) break
-
-      const agent = this.agentManager.getAgent(agentId)
-      if (!agent) break
-
-      const phase = runbook.phases[snapshot.phaseIndex]
-      const step = phase.steps[snapshot.stepIndex]
-
-      const prompt = generateStepPrompt({
-        step,
-        cardName: agent.card.name,
-        cardDescription: agent.card.description,
-        branchName: agent.worktree.branch,
-        worktreePath: agent.worktree.path,
-        phaseIndex: snapshot.phaseIndex,
-        totalPhases: snapshot.totalPhases,
-        stepIndex: snapshot.stepIndex,
-        totalStepsInPhase: phase.steps.length
-      })
-
-      this.log(agentId, {
-        event: 'prompt_sent',
-        phaseIndex: snapshot.phaseIndex,
-        stepIndex: snapshot.stepIndex,
-        phaseName: phase.name,
-        stepTitle: step.title,
-        prompt
-      })
-
-      // Emit a step banner to the terminal before the prompt is sent
-      this.emitStepBanner(agentId, snapshot, phase.name, step.title)
-
-      entry.stepStartedAt = Date.now()
-      const effectiveApproval = entry.approvalModeOverride ?? this.approvalMode
-      const ok = await this.runStep(entry, prompt, effectiveApproval, step.title, config)
-      if (entry.stopped) break
-
-      const stepDurationMs = Date.now() - entry.stepStartedAt
-
-      if (!ok) {
-        this.log(agentId, {
-          event: 'step_error',
-          phaseIndex: snapshot.phaseIndex,
-          stepIndex: snapshot.stepIndex,
-          phaseName: phase.name,
-          stepTitle: step.title,
-          durationMs: stepDurationMs,
-          error: sm.getSnapshot().error ?? 'Unknown error'
-        })
-        break
-      }
-
-      // Advance — handles phase transitions and done automatically.
-      // advanceStep() creates the step history record via step:completed event.
-      const completedPhaseIndex = snapshot.phaseIndex
-      const completedStepIndex = snapshot.stepIndex
-      sm.advanceStep()
-
-      // Set summary after advance (history record now exists)
-      const summary = extractStepSummary(entry.lastAssistantText)
-      this.agentManager.setStepSummary(agentId, completedPhaseIndex, completedStepIndex, summary)
-
-      // Check off the completed step in the tracker doc (fire-and-forget)
-      checkOffStep(
-        agent.worktree.path,
-        agent.worktree.branch,
-        completedPhaseIndex,
-        completedStepIndex
-      ).catch(() => {})
-
-      if (entry.lastAssistantText) {
-        this.log(agentId, {
-          event: 'response_received',
-          phaseIndex: completedPhaseIndex,
-          stepIndex: completedStepIndex,
-          text: entry.lastAssistantText.slice(-2000)
-        })
-      }
-
-      this.log(agentId, {
-        event: 'step_completed',
-        phaseIndex: completedPhaseIndex,
-        stepIndex: completedStepIndex,
-        phaseName: phase.name,
-        stepTitle: step.title,
-        durationMs: stepDurationMs,
-        summary
-      })
-    }
+    // Continuous session: run all steps in a single query() call.
+    // Non-final steps signal completion via AskUserQuestion("STEP_DONE: ..."),
+    // the orchestrator auto-responds with the next step's prompt via streamInput().
+    // This eliminates --resume between steps (spike #010).
+    await this.runContinuousSession(entry, config, agentLoopStartedAt)
 
     // Normal-path cleanup. The .finally() in launchAgent() is a safety net for
     // unexpected throws — running.delete/tryDequeue are idempotent, so the
@@ -705,31 +591,130 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
   }
 
   /**
-   * Run a single CLI session for one runbook step.
-   * Returns true on success, false on error.
-   * The Promise stays pending during permission/question pauses.
+   * Compute whether the given phase/step position is the last step in the runbook.
    */
-  private runStep(
-    entry: RunningAgent,
-    prompt: string,
-    approvalMode?: ApprovalMode,
-    stepTitle?: string,
-    config?: Awaited<ReturnType<typeof loadConfig>>
-  ): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      const { agentId } = entry
-      const agent = this.agentManager.getAgent(agentId)
-      if (!agent) {
-        this.handleAgentError(agentId, 'Agent not found')
-        resolve(false)
-        return
-      }
+  private isLastRunbookStep(
+    runbook: { phases: { steps: unknown[] }[] },
+    phaseIndex: number,
+    stepIndex: number
+  ): boolean {
+    const lastPhase = runbook.phases.length - 1
+    return phaseIndex === lastPhase && stepIndex === runbook.phases[lastPhase].steps.length - 1
+  }
 
+  /**
+   * Generate a step prompt for the current state-machine position.
+   * Reads snapshot + runbook, returns { prompt, phaseName, stepTitle } or null if invalid.
+   */
+  private buildStepPrompt(agentId: string): {
+    prompt: string
+    phaseName: string
+    stepTitle: string
+    snapshot: ReturnType<NonNullable<ReturnType<AgentManager['getStateMachine']>>['getSnapshot']>
+  } | null {
+    const sm = this.agentManager.getStateMachine(agentId)
+    if (!sm) return null
+    const snapshot = sm.getSnapshot()
+    if (snapshot.phaseIndex === -1) return null
+
+    const runbook = this.agentManager.getRunbook(agentId)
+    if (!runbook) return null
+
+    const agent = this.agentManager.getAgent(agentId)
+    if (!agent) return null
+
+    const phase = runbook.phases[snapshot.phaseIndex]
+    const step = phase.steps[snapshot.stepIndex]
+
+    const prompt = generateStepPrompt({
+      step,
+      cardName: agent.card.name,
+      cardDescription: agent.card.description,
+      branchName: agent.worktree.branch,
+      worktreePath: agent.worktree.path,
+      phaseIndex: snapshot.phaseIndex,
+      totalPhases: snapshot.totalPhases,
+      stepIndex: snapshot.stepIndex,
+      totalStepsInPhase: phase.steps.length,
+      isLastStep: this.isLastRunbookStep(runbook, snapshot.phaseIndex, snapshot.stepIndex)
+    })
+
+    return { prompt, phaseName: phase.name, stepTitle: step.title, snapshot }
+  }
+
+  /**
+   * Complete a step: log it, advance the state machine, set the summary, check
+   * off the tracker doc. Returns the new state after advancing.
+   */
+  private completeStep(
+    agentId: string,
+    summary: string,
+    phaseIndex: number,
+    stepIndex: number,
+    phaseName: string,
+    stepTitle: string,
+    durationMs: number
+  ): string {
+    const sm = this.agentManager.getStateMachine(agentId)!
+    sm.advanceStep()
+    this.agentManager.setStepSummary(agentId, phaseIndex, stepIndex, summary)
+
+    const agent = this.agentManager.getAgent(agentId)
+    if (agent) {
+      checkOffStep(agent.worktree.path, agent.worktree.branch, phaseIndex, stepIndex).catch(
+        () => {}
+      )
+    }
+
+    this.log(agentId, {
+      event: 'step_completed',
+      phaseIndex,
+      stepIndex,
+      phaseName,
+      stepTitle,
+      durationMs,
+      summary
+    })
+
+    return sm.getState()
+  }
+
+  /**
+   * Run all remaining steps in a single query() call (spike #010).
+   *
+   * Non-final steps end with AskUserQuestion("STEP_DONE: <summary>").
+   * The handler auto-responds with the next step's prompt via streamInput(),
+   * keeping the generator alive — no --resume needed between steps.
+   * The final step ends naturally (no AskUserQuestion), completing the generator.
+   *
+   * Real human questions (no STEP_DONE prefix) still show the UI dialog.
+   */
+  private async runContinuousSession(
+    entry: RunningAgent,
+    config: Awaited<ReturnType<typeof loadConfig>>,
+    agentLoopStartedAt: number
+  ): Promise<void> {
+    const { agentId } = entry
+    const sm = this.agentManager.getStateMachine(agentId)
+    if (!sm) throw new Error(`Agent ${agentId} has no state machine`)
+
+    // Pre-flight: bail out if we're already done/errored
+    const state = sm.getState()
+    if (state === 'done' || state === 'error') {
+      this.handleTerminalState(agentId, agentLoopStartedAt)
+      return
+    }
+
+    // Build the first step's prompt
+    const first = this.buildStepPrompt(agentId)
+    if (!first) return
+
+    return new Promise<void>((resolve) => {
       let resolved = false
-      const safeResolve = (value: boolean): void => {
+      const safeResolve = (): void => {
         if (!resolved) {
           resolved = true
-          resolve(value)
+          resolve()
         }
       }
 
@@ -746,6 +731,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         entry.stuckNotified = false
       }
 
+      // --- Event wiring (same as runStep) ---
+
       driver.on('session:init', (info) => {
         entry.sdkSessionId = info.sessionId
         this.agentManager.setSessionId(agentId, info.sessionId)
@@ -755,25 +742,19 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       driver.on('stream:text', resetActivity)
 
       driver.on('assistant:message', (content: AssistantContent) => {
-        if (content.text) {
-          entry.lastAssistantText = content.text
-        }
+        if (content.text) entry.lastAssistantText = content.text
         resetActivity()
       })
 
       driver.on('permission:request', (request) => {
-        const sm = this.agentManager.getStateMachine(agentId)
-        // Capture snapshot BEFORE transitioning — waiting_for_human resets phaseIndex to -1
-        const snap = sm?.getSnapshot()
-        if (sm && sm.getState() !== 'waiting_for_human') {
-          sm.setWaitingForHuman()
-        }
+        const snap = sm.getSnapshot()
+        if (sm.getState() !== 'waiting_for_human') sm.setWaitingForHuman()
         const inputSummary = summarizeToolInput(request.toolName, request.toolInput)
         const detail = `${request.toolName}: ${inputSummary}`
         this.log(agentId, {
           event: 'permission_requested',
-          phaseIndex: snap?.phaseIndex ?? -1,
-          stepIndex: snap?.stepIndex ?? -1,
+          phaseIndex: snap.phaseIndex,
+          stepIndex: snap.stepIndex,
           toolName: request.toolName,
           detail
         })
@@ -786,17 +767,14 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       })
 
       driver.on('security:alert', (request) => {
-        const sm = this.agentManager.getStateMachine(agentId)
-        const snap = sm?.getSnapshot()
-        if (sm && sm.getState() !== 'waiting_for_human') {
-          sm.setWaitingForHuman()
-        }
+        const snap = sm.getSnapshot()
+        if (sm.getState() !== 'waiting_for_human') sm.setWaitingForHuman()
         const inputSummary = summarizeToolInput(request.toolName, request.toolInput)
         const detail = `SECURITY ALERT: ${request.toolName}: ${inputSummary}`
         this.log(agentId, {
           event: 'permission_requested',
-          phaseIndex: snap?.phaseIndex ?? -1,
-          stepIndex: snap?.stepIndex ?? -1,
+          phaseIndex: snap.phaseIndex,
+          stepIndex: snap.stepIndex,
           toolName: request.toolName,
           detail
         })
@@ -808,17 +786,86 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         })
       })
 
+      // --- Step-done detection in user:question handler ---
+
       driver.on('user:question', (request) => {
-        const sm = this.agentManager.getStateMachine(agentId)
-        // Capture snapshot BEFORE transitioning — waiting_for_human resets phaseIndex to -1
-        const snap = sm?.getSnapshot()
-        if (sm && sm.getState() !== 'waiting_for_human') {
-          sm.setWaitingForHuman()
+        if (request.question.startsWith('STEP_DONE: ')) {
+          // Auto-handle step completion — don't show UI
+          const summary = request.question.slice('STEP_DONE: '.length).trim()
+          const snap = sm.getSnapshot()
+          const runbook = this.agentManager.getRunbook(agentId)
+          const phase = runbook?.phases[snap.phaseIndex]
+          const step = phase?.steps[snap.stepIndex]
+          const stepDurationMs = Date.now() - entry.stepStartedAt
+
+          if (entry.lastAssistantText) {
+            this.log(agentId, {
+              event: 'response_received',
+              phaseIndex: snap.phaseIndex,
+              stepIndex: snap.stepIndex,
+              text: entry.lastAssistantText.slice(-2000)
+            })
+          }
+
+          const newState = this.completeStep(
+            agentId,
+            summary,
+            snap.phaseIndex,
+            snap.stepIndex,
+            phase?.name ?? '',
+            step?.title ?? '',
+            stepDurationMs
+          )
+
+          if (newState === 'done') {
+            // All steps complete — unblock the generator and let it wind down
+            this.handleTerminalState(agentId, agentLoopStartedAt)
+            driver.respondToUserQuestion({
+              requestId: request.requestId,
+              answer: 'All steps complete. Thank you.'
+            })
+            return
+          }
+
+          // Build and send next step's prompt
+          const next = this.buildStepPrompt(agentId)
+          if (!next) {
+            driver.respondToUserQuestion({
+              requestId: request.requestId,
+              answer: 'No more steps found.'
+            })
+            return
+          }
+
+          this.emitStepBanner(agentId, next.snapshot, next.phaseName, next.stepTitle)
+          this.emitOrchestratorInject(agentId, 'prompt', next.prompt)
+          this.log(agentId, {
+            event: 'prompt_sent',
+            phaseIndex: next.snapshot.phaseIndex,
+            stepIndex: next.snapshot.stepIndex,
+            phaseName: next.phaseName,
+            stepTitle: next.stepTitle,
+            prompt: next.prompt
+          })
+
+          entry.stepStartedAt = Date.now()
+          entry.lastAssistantText = ''
+
+          // Respond with the next step prompt — keeps the generator alive
+          driver.respondToUserQuestion({
+            requestId: request.requestId,
+            answer: next.prompt
+          })
+          return
         }
+
+        // Real question from the model — forward to UI
+        const snap = sm.getSnapshot()
+        if (sm.getState() !== 'waiting_for_human') sm.setWaitingForHuman()
         this.log(agentId, {
           event: 'question_asked',
-          phaseIndex: snap?.phaseIndex ?? -1,
-          stepIndex: snap?.stepIndex ?? -1,
+          phaseIndex: snap.phaseIndex,
+          stepIndex: snap.stepIndex,
           question: request.question
         })
         this.agentManager.setPendingHumanInteraction(agentId, {
@@ -829,46 +876,126 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
         })
       })
 
+      // --- Session end ---
+
       driver.on('session:result', (result: SessionResult) => {
         if (result.subtype === 'success') {
-          safeResolve(true)
+          // Final step completed naturally (no AskUserQuestion)
+          const snap = sm.getSnapshot()
+          if (snap.phaseIndex >= 0 && sm.getState() !== 'done') {
+            const runbook = this.agentManager.getRunbook(agentId)
+            const phase = runbook?.phases[snap.phaseIndex]
+            const step = phase?.steps[snap.stepIndex]
+            const stepDurationMs = Date.now() - entry.stepStartedAt
+            const summary = extractStepSummary(entry.lastAssistantText)
+
+            if (entry.lastAssistantText) {
+              this.log(agentId, {
+                event: 'response_received',
+                phaseIndex: snap.phaseIndex,
+                stepIndex: snap.stepIndex,
+                text: entry.lastAssistantText.slice(-2000)
+              })
+            }
+
+            this.completeStep(
+              agentId,
+              summary,
+              snap.phaseIndex,
+              snap.stepIndex,
+              phase?.name ?? '',
+              step?.title ?? '',
+              stepDurationMs
+            )
+          }
+          this.handleTerminalState(agentId, agentLoopStartedAt)
         } else {
           this.handleAgentError(
             agentId,
             `CLI session ended: ${result.subtype}${result.result ? ` — ${result.result}` : ''}`
           )
-          safeResolve(false)
         }
+        safeResolve()
       })
 
       driver.on('error', (err: Error) => {
         if (!entry.stopped) {
           this.handleAgentError(agentId, err.message)
         }
-        safeResolve(false)
+        safeResolve()
       })
 
-      // Use the target repo root as cwd so the SDK finds .claude/settings.*
-      // for permission rules. The prompt already tells the agent the worktree path.
-      const cwd = config?.targetRepoPath || agent.worktree.path
+      // --- Start the session ---
+
+      this.emitStepBanner(agentId, first.snapshot, first.phaseName, first.stepTitle)
+      this.emitOrchestratorInject(agentId, 'prompt', first.prompt)
+      this.log(agentId, {
+        event: 'prompt_sent',
+        phaseIndex: first.snapshot.phaseIndex,
+        stepIndex: first.snapshot.stepIndex,
+        phaseName: first.phaseName,
+        stepTitle: first.stepTitle,
+        prompt: first.prompt
+      })
+
+      entry.stepStartedAt = Date.now()
+      const effectiveApproval = entry.approvalModeOverride ?? this.approvalMode
+      const agent = this.agentManager.getAgent(agentId)
+      const cwd = config?.targetRepoPath || agent?.worktree.path || '.'
 
       driver
         .startSession({
-          prompt,
+          prompt: first.prompt,
           cwd,
           sessionId: entry.sdkSessionId ?? undefined,
           settingSources: ['user', 'project', 'local'],
-          approvalMode,
-          worktreePath: agent.worktree.path,
-          currentStepTitle: stepTitle
+          approvalMode: effectiveApproval,
+          worktreePath: agent?.worktree.path,
+          currentStepTitle: first.stepTitle
         })
         .catch((err) => {
           if (!entry.stopped) {
-            this.handleAgentError(agentId, err instanceof Error ? err.message : String(err))
+            this.handleAgentError(
+              agentId,
+              err instanceof Error ? err.message : String(err)
+            )
           }
-          safeResolve(false)
+          safeResolve()
         })
     })
+  }
+
+  /**
+   * Handle done/error terminal states: log, emit events, clean up.
+   */
+  private handleTerminalState(agentId: string, agentLoopStartedAt: number): void {
+    const sm = this.agentManager.getStateMachine(agentId)
+    if (!sm) return
+
+    const state = sm.getState()
+    if (state === 'done') {
+      const doneAgent = this.agentManager.getAgent(agentId)
+      if (doneAgent) {
+        removeTrackerDoc(doneAgent.worktree.path, doneAgent.worktree.branch).catch(() => {})
+      }
+      this.trelloCompleteCard(agentId).catch(() => {})
+      const agentSnapshot = this.agentManager.getAgent(agentId)
+      this.log(agentId, {
+        event: 'agent_completed',
+        totalDurationMs: Date.now() - agentLoopStartedAt,
+        stepsCompleted: agentSnapshot?.stepHistory.length ?? 0
+      })
+      this.emit('agent:completed', agentId)
+    } else if (state === 'error') {
+      const snap = sm.getSnapshot()
+      this.log(agentId, {
+        event: 'agent_error',
+        error: snap.error ?? 'Unknown error',
+        phaseIndex: snap.phaseIndex,
+        stepIndex: snap.stepIndex
+      })
+      this.emit('agent:errored', agentId, snap.error ?? 'Unknown error')
+    }
   }
 
   private handleAgentError(agentId: string, message: string): void {
@@ -884,6 +1011,25 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       }
     }
     this.emit('agent:errored', agentId, message)
+  }
+
+  /** Push an orchestrator-injected content event to the renderer. */
+  private emitOrchestratorInject(
+    agentId: string,
+    variant: 'prompt' | 'permission-response' | 'question-response',
+    content: string
+  ): void {
+    const sessionId = `orchestration-${agentId}`
+    const win = BrowserWindow.getAllWindows()[0]
+    if (!win || win.isDestroyed()) return
+
+    win.webContents.send('cli:event', {
+      sessionId,
+      event: {
+        type: 'orchestrator:inject' as const,
+        data: { variant, content }
+      }
+    } satisfies CliEventPayload)
   }
 
   /** Push a structured step banner to the renderer. */

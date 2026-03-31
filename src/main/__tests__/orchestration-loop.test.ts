@@ -116,40 +116,50 @@ async function setupAgent(): Promise<{ manager: AgentManager; agentId: string }>
   return { manager, agentId }
 }
 
+type EmitFn = { emit: (event: string, ...args: unknown[]) => void }
+
 /**
- * Make mockStartSession simulate a successful session.
- * The mock emits events on the driver instance when startSession is called.
+ * Make mocks simulate a continuous session where all steps succeed.
+ * Non-final steps signal via AskUserQuestion("STEP_DONE: ..."),
+ * the last step ends naturally with session:result.
+ * Matches the spike #010 continuous-session architecture.
  */
-function mockSuccessfulSession(): void {
-  mockStartSession.mockImplementation(async function (this: {
-    emit: (event: string, ...args: unknown[]) => void
-  }) {
-    // Simulate session:init
-    this.emit('session:init', {
-      sessionId: 'sdk-session-1',
-      model: 'claude-opus-4-6',
-      tools: []
-    })
-    // Simulate assistant message
-    this.emit('assistant:message', {
-      text: 'Step completed successfully.',
-      toolUses: []
-    })
-    // Simulate session result
-    this.emit('session:result', {
-      subtype: 'success',
-      sessionId: 'sdk-session-1',
-      costUsd: 0.01,
-      numTurns: 1,
-      durationMs: 1000
-    })
+function mockContinuousSession(totalSteps = 3): void {
+  let stepNumber = 0
+
+  const emitStep = (self: EmitFn): void => {
+    stepNumber++
+    self.emit('assistant:message', { text: `Step ${stepNumber} completed.`, toolUses: [] })
+    if (stepNumber < totalSteps) {
+      self.emit('user:question', {
+        requestId: `req-${stepNumber}`,
+        question: `STEP_DONE: Step ${stepNumber} done`,
+        toolUseId: `tool-${stepNumber}`
+      })
+    } else {
+      self.emit('session:result', {
+        subtype: 'success',
+        sessionId: 'sdk-session-1',
+        costUsd: 0.01,
+        numTurns: totalSteps,
+        durationMs: 1000
+      })
+    }
+  }
+
+  mockStartSession.mockImplementation(async function (this: EmitFn) {
+    stepNumber = 0
+    this.emit('session:init', { sessionId: 'sdk-session-1', model: 'claude-opus-4-6', tools: [] })
+    emitStep(this)
+  })
+
+  mockRespondToUserQuestion.mockImplementation(function (this: EmitFn) {
+    emitStep(this)
   })
 }
 
 function mockErrorSession(errorMessage: string): void {
-  mockStartSession.mockImplementation(async function (this: {
-    emit: (event: string, ...args: unknown[]) => void
-  }) {
+  mockStartSession.mockImplementation(async function (this: EmitFn) {
     this.emit('error', new Error(errorMessage))
   })
 }
@@ -188,7 +198,7 @@ describe('OrchestrationLoop', () => {
       const { manager, agentId } = await setupAgent()
       const loop = new OrchestrationLoop(manager)
 
-      mockSuccessfulSession()
+      mockContinuousSession()
 
       const completed = new Promise<string>((resolve) => {
         loop.on('agent:completed', (id) => resolve(id))
@@ -203,15 +213,15 @@ describe('OrchestrationLoop', () => {
       const agent = manager.getAgent(agentId)
       expect(agent?.stateSnapshot.state).toBe('done')
 
-      // All 3 steps should have been executed (2 Research + 1 Implement)
-      expect(mockStartSession).toHaveBeenCalledTimes(3)
+      // One continuous session for all 3 steps (spike #010)
+      expect(mockStartSession).toHaveBeenCalledTimes(1)
     })
 
     it('passes settingSources to CliDriver sessions', async () => {
       const { manager, agentId } = await setupAgent()
       const loop = new OrchestrationLoop(manager)
 
-      mockSuccessfulSession()
+      mockContinuousSession()
 
       const completed = new Promise<void>((resolve) => {
         loop.on('agent:completed', () => resolve())
@@ -239,7 +249,7 @@ describe('OrchestrationLoop', () => {
         stateChanges.push(snapshot.state)
       })
 
-      mockSuccessfulSession()
+      mockContinuousSession()
 
       const completed = new Promise<void>((resolve) => {
         loop.on('agent:completed', () => resolve())
@@ -259,7 +269,7 @@ describe('OrchestrationLoop', () => {
       const { manager, agentId } = await setupAgent()
       const loop = new OrchestrationLoop(manager)
 
-      mockSuccessfulSession()
+      mockContinuousSession()
 
       const completed = new Promise<void>((resolve) => {
         loop.on('agent:completed', () => resolve())
@@ -280,7 +290,7 @@ describe('OrchestrationLoop', () => {
       const { manager, agentId } = await setupAgent()
       const loop = new OrchestrationLoop(manager)
 
-      mockSuccessfulSession()
+      mockContinuousSession()
 
       const completed = new Promise<void>((resolve) => {
         loop.on('agent:completed', () => resolve())
@@ -326,22 +336,41 @@ describe('OrchestrationLoop', () => {
       const { manager, agentId } = await setupAgent()
       const loop = new OrchestrationLoop(manager)
 
-      // First step errors
-      let callCount = 0
-      mockStartSession.mockImplementation(async function (this: {
-        emit: (event: string, ...args: unknown[]) => void
-      }) {
-        callCount++
-        if (callCount === 1) {
+      // First session errors immediately
+      let sessionCallCount = 0
+      let restartStepNumber = 0
+      mockStartSession.mockImplementation(async function (this: EmitFn) {
+        sessionCallCount++
+        if (sessionCallCount === 1) {
           this.emit('error', new Error('CLI crash'))
         } else {
+          // Restart: run all 3 steps in continuous session
+          restartStepNumber = 0
           this.emit('session:init', { sessionId: 'sdk-2', model: 'claude-opus-4-6', tools: [] })
+          restartStepNumber++
           this.emit('assistant:message', { text: 'Done.', toolUses: [] })
+          this.emit('user:question', {
+            requestId: 'req-1',
+            question: 'STEP_DONE: Step 1 done',
+            toolUseId: 'tool-1'
+          })
+        }
+      })
+      mockRespondToUserQuestion.mockImplementation(function (this: EmitFn) {
+        restartStepNumber++
+        this.emit('assistant:message', { text: `Step ${restartStepNumber} done.`, toolUses: [] })
+        if (restartStepNumber < 3) {
+          this.emit('user:question', {
+            requestId: `req-${restartStepNumber}`,
+            question: `STEP_DONE: Step ${restartStepNumber} done`,
+            toolUseId: `tool-${restartStepNumber}`
+          })
+        } else {
           this.emit('session:result', {
             subtype: 'success',
             sessionId: 'sdk-2',
             costUsd: 0.01,
-            numTurns: 1,
+            numTurns: 3,
             durationMs: 1000
           })
         }
@@ -421,56 +450,67 @@ describe('OrchestrationLoop', () => {
       const { manager, agentId } = await setupAgent()
       const loop = new OrchestrationLoop(manager)
 
-      // First step succeeds, second step errors
-      let callCount = 0
-      mockStartSession.mockImplementation(async function (this: {
-        emit: (event: string, ...args: unknown[]) => void
-      }) {
-        callCount++
-        if (callCount === 1) {
-          // Step 1 succeeds
+      // First run: step 1 succeeds via STEP_DONE, then step 2 errors
+      let sessionCallCount = 0
+      let restartStepNumber = 0
+      mockStartSession.mockImplementation(async function (this: EmitFn) {
+        sessionCallCount++
+        if (sessionCallCount === 1) {
+          // First run: step 1 succeeds, step 2 errors
           this.emit('session:init', { sessionId: 'sdk-1', model: 'claude-opus-4-6', tools: [] })
-          this.emit('assistant:message', { text: 'Done.', toolUses: [] })
-          this.emit('session:result', {
-            subtype: 'success',
-            sessionId: 'sdk-1',
-            costUsd: 0.01,
-            numTurns: 1,
-            durationMs: 1000
+          this.emit('assistant:message', { text: 'Step 1 done.', toolUses: [] })
+          this.emit('user:question', {
+            requestId: 'req-1',
+            question: 'STEP_DONE: Step 1 done',
+            toolUseId: 'tool-1'
           })
-        } else if (callCount === 2) {
-          // Step 2 errors
-          this.emit('error', new Error('CLI crash'))
         } else {
-          // After restart: steps succeed
+          // Restart: resume from step 2 (2 remaining steps)
+          restartStepNumber = 0
           this.emit('session:init', { sessionId: 'sdk-2', model: 'claude-opus-4-6', tools: [] })
-          this.emit('assistant:message', { text: 'Resumed.', toolUses: [] })
-          this.emit('session:result', {
-            subtype: 'success',
-            sessionId: 'sdk-2',
-            costUsd: 0.01,
-            numTurns: 1,
-            durationMs: 1000
+          restartStepNumber++
+          this.emit('assistant:message', { text: 'Step 2 resumed.', toolUses: [] })
+          this.emit('user:question', {
+            requestId: 'req-r1',
+            question: 'STEP_DONE: Step 2 done',
+            toolUseId: 'tool-r1'
           })
         }
       })
 
-      // Run until error. Wait for both the error event AND cleanup (.finally)
+      // First run: when step 2 prompt is sent, emit error
+      mockRespondToUserQuestion.mockImplementationOnce(function (this: EmitFn) {
+        this.emit('error', new Error('CLI crash'))
+      })
+
+      // Run until error
       const errored = new Promise<void>((resolve) => {
         loop.on('agent:errored', () => resolve())
       })
       loop.startAgent(agentId)
       await errored
 
-      // Wait a tick for the .finally() cleanup to complete (removes from running map)
+      // Wait a tick for cleanup
       await new Promise((r) => setTimeout(r, 10))
 
       const erroredAgent = manager.getAgent(agentId)
       expect(erroredAgent?.stateSnapshot.state).toBe('error')
-      // Should have completed 1 step before erroring
       expect(erroredAgent?.stepHistory.length).toBe(1)
 
-      // Restart the agent — should resume at step 2, not step 1
+      // Set up respondToUserQuestion for restart (step 3 after step 2 STEP_DONE)
+      mockRespondToUserQuestion.mockImplementation(function (this: EmitFn) {
+        restartStepNumber++
+        this.emit('assistant:message', { text: 'Step 3 done.', toolUses: [] })
+        this.emit('session:result', {
+          subtype: 'success',
+          sessionId: 'sdk-2',
+          costUsd: 0.01,
+          numTurns: 2,
+          durationMs: 1000
+        })
+      })
+
+      // Restart — should resume at step 2
       const completed = new Promise<void>((resolve) => {
         loop.on('agent:completed', () => resolve())
       })
@@ -479,9 +519,8 @@ describe('OrchestrationLoop', () => {
 
       const doneAgent = manager.getAgent(agentId)
       expect(doneAgent?.stateSnapshot.state).toBe('done')
-      // callCount should be: 1 (step1) + 1 (step2 error) + 2 (step2 retry + step3) = 4
-      // Step1 succeeded, step2 errored, restart runs step2 again + step3
-      expect(mockStartSession).toHaveBeenCalledTimes(4)
+      // 2 startSession calls: first run + restart (continuous sessions)
+      expect(mockStartSession).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -516,21 +555,42 @@ describe('OrchestrationLoop', () => {
         stuckEmitted = true
       })
 
-      // Session emits activity every 50ms (within the 200ms timeout)
-      mockStartSession.mockImplementation(async function (this: {
-        emit: (event: string, ...args: unknown[]) => void
-      }) {
+      // Session emits activity every 50ms (within the 200ms timeout),
+      // then completes all 3 steps via continuous session pattern
+      let stepNum = 0
+      mockStartSession.mockImplementation(async function (this: EmitFn) {
+        this.emit('session:init', { sessionId: 'sdk-1', model: 'claude-opus-4-6', tools: [] })
         for (let i = 0; i < 5; i++) {
           await new Promise((r) => setTimeout(r, 50))
           this.emit('stream:text', { text: '.' })
         }
-        this.emit('session:result', {
-          subtype: 'success',
-          sessionId: 'sdk-1',
-          costUsd: 0.01,
-          numTurns: 1,
-          durationMs: 250
+        stepNum++
+        this.emit('assistant:message', { text: 'Step 1 done.', toolUses: [] })
+        this.emit('user:question', {
+          requestId: 'req-1',
+          question: 'STEP_DONE: Step 1 done',
+          toolUseId: 'tool-1'
         })
+      })
+
+      mockRespondToUserQuestion.mockImplementation(function (this: EmitFn) {
+        stepNum++
+        this.emit('assistant:message', { text: `Step ${stepNum} done.`, toolUses: [] })
+        if (stepNum < 3) {
+          this.emit('user:question', {
+            requestId: `req-${stepNum}`,
+            question: `STEP_DONE: Step ${stepNum} done`,
+            toolUseId: `tool-${stepNum}`
+          })
+        } else {
+          this.emit('session:result', {
+            subtype: 'success',
+            sessionId: 'sdk-1',
+            costUsd: 0.01,
+            numTurns: 3,
+            durationMs: 250
+          })
+        }
       })
 
       const completed = new Promise<void>((resolve) => {
@@ -661,7 +721,7 @@ describe('OrchestrationLoop', () => {
       const { manager, agentIds } = await setupMultipleAgents(3)
       const loop = new OrchestrationLoop(manager, 2)
 
-      mockSuccessfulSession()
+      mockContinuousSession()
 
       const dequeuedEvents: string[] = []
       loop.on('agent:dequeued', (id) => dequeuedEvents.push(id))
@@ -786,32 +846,49 @@ describe('OrchestrationLoop', () => {
       const { manager, agentIds } = await setupMultipleAgents(2)
       const loop = new OrchestrationLoop(manager, 1)
 
-      mockSuccessfulSession()
-
       const dequeuedEvents: string[] = []
       loop.on('agent:dequeued', (id) => dequeuedEvents.push(id))
 
-      // Make agent 1's session hang so we can observe it being dequeued
-      let callCount = 0
-      mockStartSession.mockImplementation(function (this: {
-        emit: (event: string, ...args: unknown[]) => void
-      }) {
-        callCount++
-        if (callCount <= 3) {
-          // First 3 calls (agent 0's 3 steps) complete immediately
+      // Agent 0 completes all 3 steps in one continuous session; agent 1 hangs
+      let sessionCallCount = 0
+      let stepNum = 0
+      mockStartSession.mockImplementation(function (this: EmitFn) {
+        sessionCallCount++
+        if (sessionCallCount === 1) {
+          // Agent 0: full continuous session
+          stepNum = 0
           this.emit('session:init', { sessionId: 'sdk-1', model: 'claude-opus-4-6', tools: [] })
+          stepNum++
           this.emit('assistant:message', { text: 'Done.', toolUses: [] })
+          this.emit('user:question', {
+            requestId: 'req-1',
+            question: 'STEP_DONE: Step 1 done',
+            toolUseId: 'tool-1'
+          })
+          return Promise.resolve()
+        }
+        // Agent 1: hang
+        return new Promise(() => {})
+      })
+
+      mockRespondToUserQuestion.mockImplementation(function (this: EmitFn) {
+        stepNum++
+        this.emit('assistant:message', { text: `Step ${stepNum} done.`, toolUses: [] })
+        if (stepNum < 3) {
+          this.emit('user:question', {
+            requestId: `req-${stepNum}`,
+            question: `STEP_DONE: Step ${stepNum} done`,
+            toolUseId: `tool-${stepNum}`
+          })
+        } else {
           this.emit('session:result', {
             subtype: 'success',
             sessionId: 'sdk-1',
             costUsd: 0.01,
-            numTurns: 1,
+            numTurns: 3,
             durationMs: 1000
           })
-          return Promise.resolve()
         }
-        // Agent 1's steps: hang
-        return new Promise(() => {})
       })
 
       // Start agent 0 (runs), queue agent 1
@@ -823,6 +900,9 @@ describe('OrchestrationLoop', () => {
       await new Promise<void>((resolve) => {
         loop.on('agent:completed', () => resolve())
       })
+
+      // Let async cleanup (running.delete → tryDequeue) settle
+      await new Promise((r) => setTimeout(r, 10))
 
       // Agent 1 should have been dequeued
       expect(dequeuedEvents).toEqual([agentIds[1]])

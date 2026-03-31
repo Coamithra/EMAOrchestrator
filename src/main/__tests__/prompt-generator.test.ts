@@ -70,11 +70,18 @@ describe('generateStepPrompt', () => {
     expect(prompt).not.toMatch(/### Task: Read the referenced code\n\n\n/)
   })
 
-  it('includes the completion signal', () => {
+  it('includes STEP_DONE completion signal for non-final steps', () => {
     const prompt = generateStepPrompt(makeContext())
+    expect(prompt).toContain('STEP_DONE: ')
+    expect(prompt).toContain('AskUserQuestion')
+  })
+
+  it('includes natural completion signal for the last step', () => {
+    const prompt = generateStepPrompt(makeContext({ isLastStep: true }))
     expect(prompt).toContain(
       'When you have completed this step, provide a brief summary of what you accomplished.'
     )
+    expect(prompt).not.toContain('STEP_DONE')
   })
 
   it('computes phase and step numbers as 1-based', () => {

@@ -119,7 +119,7 @@ Pure function that transforms a parsed `RunbookStep` + card context into a Claud
 - **`generateStepPrompt(context)`** — Takes a `StepPromptContext` and returns a prompt string ready for `CliSessionOptions.prompt`.
 - **Position header:** Each prompt starts with "Phase X of Y: PhaseName — Step Z of W" so Claude knows where it is in the workflow.
 - **First-step card context:** The Trello card name, description, branch, and worktree path are included only in the very first prompt. Subsequent prompts omit this since the long-lived session already has it (per spike #009).
-- **Completion signal:** Each prompt ends with a request for a brief summary, so the orchestrator can log step outcomes.
+- **Completion signal:** Non-final steps instruct the model to call `AskUserQuestion("STEP_DONE: <summary>")` to keep the session alive (spike #010). The final step (`isLastStep: true`) asks for a plain text summary so the generator completes naturally.
 - **Shared types:** `src/shared/prompt-generator.ts` defines `StepPromptContext` for use across main and renderer.
 
 ### Agent State Machine (`src/main/agent-state-machine.ts`)
@@ -210,7 +210,7 @@ Central controller that drives agents through runbook steps. One async loop per 
 - **`setMaxConcurrentAgents(max)`** — Live-updates the limit. Does not kill running agents; dequeues if the new limit is higher.
 - **`abortAll()`** — Clears the queue and aborts all running agents. Called on app quit.
 - **Step execution:** Each step creates a fresh CliDriver, generates a prompt via `generateStepPrompt()`, runs the session, extracts a summary from the last assistant message, calls `advanceStep()` (which auto-transitions phases), then sets the summary. The CLI session's `cwd` is set to `config.targetRepoPath` (the project root) so the SDK finds `.claude/settings.*` for permission rules — the worktree path is communicated to the agent via the step prompt.
-- **Session resumption:** Steps within the same agent share an SDK session ID (per spike #009). The first step creates a new session; subsequent steps resume it.
+- **Continuous session (spike #010):** All steps run in a single `query()` call — no `--resume` between steps. Non-final steps signal completion via `AskUserQuestion("STEP_DONE: <summary>")`. The orchestrator detects the `STEP_DONE:` prefix, advances the state machine, and auto-responds with the next step's prompt via `streamInput()`. The final step ends naturally (no `AskUserQuestion`). Real human questions (no prefix) still show the UI dialog. This eliminates the 28 `--resume` calls per 29-step runbook that previously invalidated prompt cache at 1.25x cost. On restart after stop/error, one `resume` reconnects to the prior session.
 - **Permission/question flow:** CliDriver blocks internally (deferred promise). The loop sets `waiting_for_human` on the state machine and stores the pending interaction. When the user responds via IPC, the driver unblocks and the session continues. The `runStep()` Promise stays pending during pauses — no polling needed.
 - **Error recovery:** When an agent errors and is restarted, `resumeFromError()` preserves the phase/step position so the agent resumes from the failed step, not the beginning of the phase.
 - **Stuck-agent watchdog:** A periodic check (every 60s) detects agents with no CLI activity for the configured timeout (`stuckAgentTimeoutMinutes`, default 10). Emits `agent:stuck` event. Paused during `waiting_for_human` state. Activity resets on any `stream:text`, `assistant:message`, or `session:init` event.

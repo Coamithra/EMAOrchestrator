@@ -25,4 +25,6 @@ export interface StepPromptContext {
   stepIndex: number
   /** Total number of steps in the current phase. */
   totalStepsInPhase: number
+  /** True when this is the very last step in the entire runbook. */
+  isLastStep?: boolean
 }
