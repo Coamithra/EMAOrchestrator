@@ -56,6 +56,18 @@ function Sidebar({
   const [confirmDismiss, setConfirmDismiss] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // Fetch approval modes for all agents so sidebar can show mode badges
+  useEffect(() => {
+    for (const agent of agents) {
+      window.api.getAgentApprovalMode(agent.id).then((mode) => {
+        setAgentApprovalModes((prev) => {
+          if (prev[agent.id] === mode) return prev
+          return { ...prev, [agent.id]: mode as ApprovalMode }
+        })
+      }).catch(() => {})
+    }
+  }, [agents])
+
   // Close context menu on outside click or Escape
   useEffect(() => {
     if (!contextMenu) return
@@ -159,7 +171,14 @@ function Sidebar({
       ) : (
         <ul className="sidebar__list" role="listbox">
           {sortedAgents.map((agent) => {
-            const isWaiting = agent.stateSnapshot.state === 'waiting_for_human'
+            const state = agent.stateSnapshot.state
+            const isWaiting = state === 'waiting_for_human'
+            const isAgentRunning = runningAgentIds.has(agent.id)
+            const isPaused = !isAgentRunning
+              && state !== 'done' && state !== 'idle'
+              && state !== 'picking_card' && state !== 'error'
+              && state !== 'waiting_for_human'
+            const approvalMode = agentApprovalModes[agent.id]
             return (
             <li
               key={agent.id}
@@ -177,12 +196,21 @@ function Sidebar({
               }}
             >
               <span
-                className={`sidebar__status-dot ${getStatusClass(agent.stateSnapshot.state)}`}
+                className={`sidebar__status-dot ${getStatusClass(state)}`}
               />
               <div className="sidebar__item-info">
                 <div className="sidebar__item-name">{agent.card.name}</div>
                 <div className="sidebar__item-step">{getStepLabel(agent)}</div>
               </div>
+              {approvalMode === 'smart' && (
+                <span className="sidebar__mode-badge sidebar__mode-badge--smart" title="Smart approval">S</span>
+              )}
+              {approvalMode === 'always' && (
+                <span className="sidebar__mode-badge sidebar__mode-badge--auto" title="Auto-approve">A</span>
+              )}
+              {isPaused && (
+                <span className="sidebar__paused-badge" title="Paused">{'\u23F8'}</span>
+              )}
               {isWaiting && (
                 <span className="sidebar__notification-badge" title="Waiting for input">!</span>
               )}
