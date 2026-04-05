@@ -13,13 +13,14 @@ interface MainLayoutProps {
   runningAgentIds: Set<string>
   /** When set, auto-selects this agent (e.g. after creation). Cleared after consumption. */
   pendingSelectAgentId: string | null
+  onPendingSelectConsumed: () => void
   onResumeAgent: (agentId: string) => void
   onStopAgent: (agentId: string) => void
   onDismissAgent: (agentId: string) => void
   onViewStepReport?: (agentId: string) => void
 }
 
-function MainLayout({ agents, runningAgentIds, pendingSelectAgentId, onResumeAgent, onStopAgent, onDismissAgent, onViewStepReport }: MainLayoutProps): React.JSX.Element {
+function MainLayout({ agents, runningAgentIds, pendingSelectAgentId, onPendingSelectConsumed, onResumeAgent, onStopAgent, onDismissAgent, onViewStepReport }: MainLayoutProps): React.JSX.Element {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -28,12 +29,14 @@ function MainLayout({ agents, runningAgentIds, pendingSelectAgentId, onResumeAge
   const sidebarWidthRef = useRef(sidebarWidth)
   sidebarWidthRef.current = sidebarWidth
 
-  // Auto-select a newly created agent
+  // Auto-select a newly created agent, then clear the pending flag so future
+  // agent-list updates don't keep forcing selection back to this agent.
   useEffect(() => {
     if (pendingSelectAgentId && agents.some((a) => a.id === pendingSelectAgentId)) {
       setSelectedAgentId(pendingSelectAgentId)
+      onPendingSelectConsumed()
     }
-  }, [pendingSelectAgentId, agents])
+  }, [pendingSelectAgentId, agents, onPendingSelectConsumed])
 
   // Clear stale selection when the selected agent disappears from the list
   useEffect(() => {

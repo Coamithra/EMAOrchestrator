@@ -217,6 +217,10 @@ function App(): React.JSX.Element {
     setView('main')
   }
 
+  const handlePendingSelectConsumed = useCallback(() => {
+    setPendingSelectAgentId(null)
+  }, [])
+
   const handleNewAgentClick = useCallback(() => {
     setShowNewAgentDialog(true)
   }, [])
@@ -326,6 +330,7 @@ function App(): React.JSX.Element {
         agents={agents}
         runningAgentIds={runningAgentIds}
         pendingSelectAgentId={pendingSelectAgentId}
+        onPendingSelectConsumed={handlePendingSelectConsumed}
         onResumeAgent={handleResumeAgent}
         onStopAgent={handleStopAgent}
         onDismissAgent={handleDismissAgent}

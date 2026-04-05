@@ -14,6 +14,7 @@ import type {
   AssistantContent,
   PermissionResponse,
   SecurityAlertResponse,
+  UserQuestionRequest,
   UserQuestionResponse
 } from '../shared/cli-driver'
 import type { ApprovalMode } from '../shared/config'
@@ -342,6 +343,10 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     })
 
     driver.on('user:question', (request) => {
+      // If the agent continues the runbook during a direct prompt, handle STEP_DONE
+      // the same way as runContinuousSession — advance state machine, auto-respond.
+      if (this.handleStepDone(entry, request, driver, null)) return
+
       const sm = this.agentManager.getStateMachine(agentId)
       if (sm && sm.getState() !== 'waiting_for_human') {
         sm.setWaitingForHuman()
@@ -683,6 +688,96 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
   }
 
   /**
+   * Handle a STEP_DONE question from the agent. Advances the state machine,
+   * logs completion, and auto-responds with the next step's prompt.
+   *
+   * Shared between runContinuousSession and sendDirectPrompt so that STEP_DONE
+   * signals are always handled by the orchestrator, even if the agent continues
+   * the runbook during a direct-prompt session.
+   *
+   * @returns true if the question was a STEP_DONE and was handled, false otherwise.
+   */
+  private handleStepDone(
+    entry: RunningAgent,
+    request: UserQuestionRequest,
+    driver: CliDriver,
+    agentLoopStartedAt: number | null
+  ): boolean {
+    if (!request.question.startsWith('STEP_DONE: ')) return false
+
+    const { agentId } = entry
+    const sm = this.agentManager.getStateMachine(agentId)
+    if (!sm) return false
+
+    const summary = request.question.slice('STEP_DONE: '.length).trim()
+    const snap = sm.getSnapshot()
+    const runbook = this.agentManager.getRunbook(agentId)
+    const phase = runbook?.phases[snap.phaseIndex]
+    const step = phase?.steps[snap.stepIndex]
+    const stepDurationMs = Date.now() - entry.stepStartedAt
+
+    if (entry.lastAssistantText) {
+      this.log(agentId, {
+        event: 'response_received',
+        phaseIndex: snap.phaseIndex,
+        stepIndex: snap.stepIndex,
+        text: entry.lastAssistantText.slice(-2000)
+      })
+    }
+
+    const newState = this.completeStep(
+      agentId,
+      summary,
+      snap.phaseIndex,
+      snap.stepIndex,
+      phase?.name ?? '',
+      step?.title ?? '',
+      stepDurationMs
+    )
+
+    if (newState === 'done') {
+      if (agentLoopStartedAt !== null) {
+        this.handleTerminalState(agentId, agentLoopStartedAt)
+      }
+      driver.respondToUserQuestion({
+        requestId: request.requestId,
+        answer: 'All steps complete. Thank you.'
+      })
+      return true
+    }
+
+    // Build and send next step's prompt
+    const next = this.buildStepPrompt(agentId)
+    if (!next) {
+      driver.respondToUserQuestion({
+        requestId: request.requestId,
+        answer: 'No more steps found.'
+      })
+      return true
+    }
+
+    this.emitStepBanner(agentId, next.snapshot, next.phaseName, next.stepTitle)
+    this.emitOrchestratorInject(agentId, 'prompt', next.prompt)
+    this.log(agentId, {
+      event: 'prompt_sent',
+      phaseIndex: next.snapshot.phaseIndex,
+      stepIndex: next.snapshot.stepIndex,
+      phaseName: next.phaseName,
+      stepTitle: next.stepTitle,
+      prompt: next.prompt
+    })
+
+    entry.stepStartedAt = Date.now()
+    entry.lastAssistantText = ''
+
+    driver.respondToUserQuestion({
+      requestId: request.requestId,
+      answer: next.prompt
+    })
+    return true
+  }
+
+  /**
    * Run all remaining steps in a single query() call (spike #010).
    *
    * Non-final steps end with AskUserQuestion("STEP_DONE: <summary>").
@@ -792,75 +887,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       // --- Step-done detection in user:question handler ---
 
       driver.on('user:question', (request) => {
-        if (request.question.startsWith('STEP_DONE: ')) {
-          // Auto-handle step completion — don't show UI
-          const summary = request.question.slice('STEP_DONE: '.length).trim()
-          const snap = sm.getSnapshot()
-          const runbook = this.agentManager.getRunbook(agentId)
-          const phase = runbook?.phases[snap.phaseIndex]
-          const step = phase?.steps[snap.stepIndex]
-          const stepDurationMs = Date.now() - entry.stepStartedAt
-
-          if (entry.lastAssistantText) {
-            this.log(agentId, {
-              event: 'response_received',
-              phaseIndex: snap.phaseIndex,
-              stepIndex: snap.stepIndex,
-              text: entry.lastAssistantText.slice(-2000)
-            })
-          }
-
-          const newState = this.completeStep(
-            agentId,
-            summary,
-            snap.phaseIndex,
-            snap.stepIndex,
-            phase?.name ?? '',
-            step?.title ?? '',
-            stepDurationMs
-          )
-
-          if (newState === 'done') {
-            // All steps complete — unblock the generator and let it wind down
-            this.handleTerminalState(agentId, agentLoopStartedAt)
-            driver.respondToUserQuestion({
-              requestId: request.requestId,
-              answer: 'All steps complete. Thank you.'
-            })
-            return
-          }
-
-          // Build and send next step's prompt
-          const next = this.buildStepPrompt(agentId)
-          if (!next) {
-            driver.respondToUserQuestion({
-              requestId: request.requestId,
-              answer: 'No more steps found.'
-            })
-            return
-          }
-
-          this.emitStepBanner(agentId, next.snapshot, next.phaseName, next.stepTitle)
-          this.emitOrchestratorInject(agentId, 'prompt', next.prompt)
-          this.log(agentId, {
-            event: 'prompt_sent',
-            phaseIndex: next.snapshot.phaseIndex,
-            stepIndex: next.snapshot.stepIndex,
-            phaseName: next.phaseName,
-            stepTitle: next.stepTitle,
-            prompt: next.prompt
-          })
-
-          entry.stepStartedAt = Date.now()
-          entry.lastAssistantText = ''
-
-          // Respond with the next step prompt — keeps the generator alive
-          driver.respondToUserQuestion({
-            requestId: request.requestId,
-            answer: next.prompt
-          })
-          return
-        }
+        if (this.handleStepDone(entry, request, driver, agentLoopStartedAt)) return
 
         // Real question from the model — forward to UI
         const snap = sm.getSnapshot()

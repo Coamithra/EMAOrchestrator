@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { AgentSnapshot } from '@shared/agent-manager'
 import type { AgentState } from '@shared/agent-state'
 import type { ApprovalMode } from '@shared/config'
@@ -132,6 +132,17 @@ function Sidebar({
     )
   }, [])
 
+  // Sort agents: waiting_for_human first, preserve relative order otherwise
+  const sortedAgents = useMemo(() => {
+    const waiting: AgentSnapshot[] = []
+    const rest: AgentSnapshot[] = []
+    for (const a of agents) {
+      if (a.stateSnapshot.state === 'waiting_for_human') waiting.push(a)
+      else rest.push(a)
+    }
+    return [...waiting, ...rest]
+  }, [agents])
+
   // Determine which actions are available for the context-menu agent
   const contextAgent = contextMenu
     ? agents.find((a) => a.id === contextMenu.agentId)
@@ -147,13 +158,15 @@ function Sidebar({
         <div className="sidebar__empty">No agents running</div>
       ) : (
         <ul className="sidebar__list" role="listbox">
-          {agents.map((agent) => (
+          {sortedAgents.map((agent) => {
+            const isWaiting = agent.stateSnapshot.state === 'waiting_for_human'
+            return (
             <li
               key={agent.id}
               role="option"
               aria-selected={agent.id === selectedAgentId}
               tabIndex={0}
-              className={`sidebar__item${agent.id === selectedAgentId ? ' sidebar__item--selected' : ''}`}
+              className={`sidebar__item${agent.id === selectedAgentId ? ' sidebar__item--selected' : ''}${isWaiting ? ' sidebar__item--attention' : ''}`}
               onClick={() => onSelectAgent(agent.id)}
               onContextMenu={(e) => handleContextMenu(e, agent.id)}
               onKeyDown={(e) => {
@@ -170,11 +183,12 @@ function Sidebar({
                 <div className="sidebar__item-name">{agent.card.name}</div>
                 <div className="sidebar__item-step">{getStepLabel(agent)}</div>
               </div>
-              {agent.stateSnapshot.state === 'waiting_for_human' && (
+              {isWaiting && (
                 <span className="sidebar__notification-badge" title="Waiting for input">!</span>
               )}
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 

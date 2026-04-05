@@ -86,6 +86,20 @@
   margin-top: 2px;
 }
 
+.sidebar__item--attention {
+  animation: sidebar-item-glow 2s ease-in-out infinite;
+  border-left-color: #facc15;
+}
+
+@keyframes sidebar-item-glow {
+  0%, 100% { background: rgba(250, 204, 21, 0.06); }
+  50% { background: rgba(250, 204, 21, 0.15); }
+}
+
+.sidebar__item--attention.sidebar__item--selected {
+  border-left-color: #facc15;
+}
+
 .sidebar__notification-badge {
   flex-shrink: 0;
   width: 18px;
