@@ -130,6 +130,28 @@ function App(): React.JSX.Element {
           break
         }
 
+        case 'agent:step-summary': {
+          const { agentId: summaryAgentId, phaseIndex, stepIndex, summary } = event.data
+          setAgents((prev) =>
+            prev.map((a) => {
+              if (a.id !== summaryAgentId) return a
+              const record = a.stepHistory.find(
+                (r) => r.phaseIndex === phaseIndex && r.stepIndex === stepIndex
+              )
+              if (!record || record.summary === summary) return a
+              return {
+                ...a,
+                stepHistory: a.stepHistory.map((r) =>
+                  r.phaseIndex === phaseIndex && r.stepIndex === stepIndex
+                    ? { ...r, summary }
+                    : r
+                )
+              }
+            })
+          )
+          break
+        }
+
         case 'agent:interaction-changed': {
           const { agentId: interactionAgentId, interaction } = event.data
           setAgents((prev) =>

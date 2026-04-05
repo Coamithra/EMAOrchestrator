@@ -7,6 +7,8 @@ interface ToolBlockViewProps {
 
 /** Max characters to show in the expanded tool result before truncating. */
 const MAX_RESULT_LENGTH = 5000
+/** Max characters for the collapsed inputSummary line. */
+const MAX_SUMMARY_LENGTH = 120
 
 function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
@@ -20,6 +22,12 @@ function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
       ? detail.slice(0, MAX_RESULT_LENGTH) + '\n… (truncated)'
       : detail
 
+  const summaryDisplay = expanded
+    ? block.inputSummary
+    : block.inputSummary.length > MAX_SUMMARY_LENGTH
+      ? block.inputSummary.slice(0, MAX_SUMMARY_LENGTH) + '…'
+      : block.inputSummary
+
   return (
     <div className="block-tool">
       <div className="block-tool__header" onClick={() => setExpanded(!expanded)}>
@@ -30,12 +38,12 @@ function ToolBlockViewInner({ block }: ToolBlockViewProps): React.JSX.Element {
         {isBash ? (
           <>
             <span className="block-tool__prefix">$</span>
-            <span className="block-tool__summary-inline">{block.inputSummary}</span>
+            <span className={`block-tool__summary-inline${!expanded ? ' block-tool__summary-inline--collapsed' : ''}`}>{summaryDisplay}</span>
           </>
         ) : (
           <>
             <span className="block-tool__name">{block.toolName}</span>
-            <span className="block-tool__summary-inline">{block.inputSummary}</span>
+            <span className={`block-tool__summary-inline${!expanded ? ' block-tool__summary-inline--collapsed' : ''}`}>{summaryDisplay}</span>
           </>
         )}
 

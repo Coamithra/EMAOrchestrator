@@ -4,6 +4,7 @@ import type { Runbook } from '../shared/runbook'
 import type { WorktreeInfo } from '../shared/worktree'
 import type { CardInfo, AgentSnapshot, AgentManagerEvents } from '../shared/agent-manager'
 import type { AgentState, AgentStepProgress } from '../shared/agent-state'
+import type { ApprovalMode } from '../shared/config'
 import type {
   PersistedAgent,
   StepCompletionRecord,
@@ -23,6 +24,7 @@ interface AgentEntry {
   sessionId: string | null
   stepHistory: StepCompletionRecord[]
   pendingHumanInteraction: PendingHumanInteraction | null
+  approvalModeOverride: ApprovalMode | null
   createdAt: string
   interruptedAt: string | null
 }
@@ -77,6 +79,7 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
       sessionId: null,
       stepHistory: [],
       pendingHumanInteraction: null,
+      approvalModeOverride: null,
       createdAt: new Date().toISOString(),
       interruptedAt: null
     }
@@ -106,6 +109,7 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
       sessionId: null, // CLI sessions don't survive restarts
       stepHistory: persisted.stepHistory,
       pendingHumanInteraction: persisted.pendingHumanInteraction,
+      approvalModeOverride: null, // runtime-only — not persisted
       createdAt: persisted.createdAt,
       interruptedAt: persisted.interruptedAt
     }
@@ -196,6 +200,7 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     if (record) {
       record.summary = summary
       this.persistAgent(entry)
+      this.emit('agent:step-summary', agentId, phaseIndex, stepIndex, summary)
     }
   }
 
@@ -206,6 +211,18 @@ export class AgentManager extends TypedEventEmitter<AgentManagerEvents> {
     entry.pendingHumanInteraction = interaction
     this.persistAgent(entry)
     this.emit('agent:interaction-changed', agentId, interaction)
+  }
+
+  /** Set a per-agent approval mode override. Pass null to revert to the global default. */
+  setApprovalModeOverride(agentId: string, mode: ApprovalMode | null): void {
+    const entry = this.agents.get(agentId)
+    if (!entry) throw new Error(`Unknown agent: ${agentId}`)
+    entry.approvalModeOverride = mode
+  }
+
+  /** Get the per-agent approval mode override, or null if using the global default. */
+  getApprovalModeOverride(agentId: string): ApprovalMode | null {
+    return this.agents.get(agentId)?.approvalModeOverride ?? null
   }
 
   /** Number of active agents. */

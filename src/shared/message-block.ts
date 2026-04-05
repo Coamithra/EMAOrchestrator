@@ -31,6 +31,7 @@ export interface BannerBlock extends BaseBlock {
 export interface ToolBlock extends BaseBlock {
   type: 'tool'
   toolName: string
+  toolUseId: string
   inputSummary: string
   /** Condensed summary from the SDK's tool_use_summary message. */
   summary?: string
@@ -64,6 +65,13 @@ export interface ErrorBlock extends BaseBlock {
   message: string
 }
 
+/** Orchestrator-injected content (prompts sent, permission/question responses). */
+export interface OrchestratorBlock extends BaseBlock {
+  type: 'orchestrator'
+  variant: 'prompt' | 'permission-response' | 'question-response'
+  content: string
+}
+
 /** Discriminated union of all block types. */
 export type MessageBlock =
   | TextBlock
@@ -72,6 +80,7 @@ export type MessageBlock =
   | ResultBlock
   | StatusBlock
   | ErrorBlock
+  | OrchestratorBlock
 
 /** Update notifications sent to subscribers for targeted re-renders. */
 export type BlockUpdate =

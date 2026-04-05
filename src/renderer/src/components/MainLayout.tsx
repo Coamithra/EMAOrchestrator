@@ -119,6 +119,7 @@ function MainLayout({ agents, runningAgentIds, pendingSelectAgentId, onResumeAge
         <AgentDetailPanel
           agent={selectedAgent}
           isRunning={selectedAgentId ? runningAgentIds.has(selectedAgentId) : false}
+          showOrchestratorBlocks
           onResume={onResumeAgent}
           onStop={onStopAgent}
         />

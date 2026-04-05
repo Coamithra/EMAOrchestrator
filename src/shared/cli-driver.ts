@@ -74,17 +74,40 @@ export interface SecurityAlertResponse {
   behavior: 'override' | 'dismiss'
 }
 
+/** A single option within a structured question from the AskUserQuestion tool. */
+export interface QuestionOption {
+  label: string
+  description: string
+  preview?: string
+}
+
+/** A structured question from the AskUserQuestion tool (SDK format). */
+export interface StructuredQuestion {
+  question: string
+  header: string
+  options: QuestionOption[]
+  multiSelect: boolean
+}
+
 /** Emitted when Claude calls the AskUserQuestion tool. */
 export interface UserQuestionRequest {
   requestId: string
+  /** Simple question text (legacy / STEP_DONE signaling). */
   question: string
   toolUseId: string
+  /** Structured questions with options (SDK AskUserQuestion format). */
+  questions?: StructuredQuestion[]
+  /** Raw tool input — preserved so the response can echo it back. */
+  toolInput?: Record<string, unknown>
 }
 
 /** Caller response to a UserQuestionRequest. */
 export interface UserQuestionResponse {
   requestId: string
+  /** Simple text answer (legacy path / free-text fallback). */
   answer: string
+  /** Structured answers mapping question text → selected option label(s). */
+  answers?: Record<string, string>
 }
 
 /** Session metadata from the SDK system/init message. */
@@ -119,17 +142,21 @@ export interface AssistantContent {
 export interface ToolStartEvent {
   toolName: string
   inputSummary: string
+  toolUseId: string
 }
 
 /** Emitted periodically while a tool is executing. */
 export interface ToolActivityEvent {
   toolName: string
   elapsedSeconds: number
+  toolUseId: string
 }
 
 /** Emitted when the SDK provides a tool use summary. */
 export interface ToolSummaryEvent {
   summary: string
+  /** Tool use IDs this summary covers (may be multiple). */
+  toolUseIds: string[]
 }
 
 /** Emitted when a tool execution completes with its actual output. */

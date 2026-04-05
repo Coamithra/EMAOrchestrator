@@ -14,6 +14,7 @@ import './AgentDetailPanel.css'
 interface AgentDetailPanelProps {
   agent: AgentSnapshot | null
   isRunning?: boolean
+  showOrchestratorBlocks?: boolean
   onResume?: (agentId: string) => void
   onStop?: (agentId: string) => void
 }
@@ -49,7 +50,7 @@ function canStop(isRunning: boolean): boolean {
   return isRunning
 }
 
-function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentDetailPanelProps): React.JSX.Element {
+function AgentDetailPanel({ agent, isRunning = false, showOrchestratorBlocks, onResume, onStop }: AgentDetailPanelProps): React.JSX.Element {
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null)
   const [pendingSecurityAlert, setPendingSecurityAlert] = useState<SecurityAlertRequest | null>(null)
   const [pendingQuestion, setPendingQuestion] = useState<UserQuestionRequest | null>(null)
@@ -228,7 +229,7 @@ function AgentDetailPanel({ agent, isRunning = false, onResume, onStop }: AgentD
           />
         </div>
         <div className="agent-detail-panel__terminal">
-          <ChatTerminal agentId={agent.id} />
+          <ChatTerminal agentId={agent.id} showOrchestratorBlocks={showOrchestratorBlocks} />
           <ConsoleInput
             key={agent.id}
             agentId={agent.id}

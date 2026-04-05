@@ -257,6 +257,12 @@
   min-width: 0;
 }
 
+.block-tool__summary-inline--collapsed {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .block-tool__elapsed {
   color: var(--ev-c-text-3);
   font-size: 11px;
@@ -359,4 +365,69 @@
   margin: 6px 0;
   color: #f48771;
   font-size: 12.5px;
+}
+
+/* ---------------------------------------------------------------------------
+ * OrchestratorBlock — orchestrator-injected prompts/responses
+ * --------------------------------------------------------------------------- */
+
+.block-orchestrator {
+  border-left: 3px solid #569cd6;
+  background: rgba(86, 156, 214, 0.06);
+  padding: 4px 12px;
+  margin: 4px 0;
+  font-size: 12px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  color: #569cd6;
+}
+
+.block-orchestrator--permission-response,
+.block-orchestrator--question-response {
+  border-left-color: #4ec9b0;
+  background: rgba(78, 201, 176, 0.06);
+  color: #4ec9b0;
+}
+
+.block-orchestrator__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.block-orchestrator__chevron {
+  font-size: 9px;
+  width: 12px;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.block-orchestrator__chevron--open {
+  transform: rotate(90deg);
+}
+
+.block-orchestrator__label {
+  font-weight: 600;
+  font-style: italic;
+  font-size: 11.5px;
+}
+
+.block-orchestrator__content-inline {
+  color: var(--ev-c-text-2);
+  font-style: normal;
+  margin-left: 4px;
+}
+
+.block-orchestrator__content {
+  margin: 4px 0 2px 18px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  color: var(--ev-c-text-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  font-style: normal;
 }

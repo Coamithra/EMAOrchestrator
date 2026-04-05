@@ -36,5 +36,6 @@ export type AgentManagerEvents = {
   'agent:error': (agentId: string, message: string) => void
   'agent:done': (agentId: string) => void
   'agent:destroyed': (agentId: string) => void
+  'agent:step-summary': (agentId: string, phaseIndex: number, stepIndex: number, summary: string) => void
   'agent:interaction-changed': (agentId: string, interaction: PendingHumanInteraction | null) => void
 }

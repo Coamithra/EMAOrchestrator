@@ -7,9 +7,10 @@ import './blocks/blocks.css'
 
 interface ChatTerminalProps {
   agentId: string
+  showOrchestratorBlocks?: boolean
 }
 
-function ChatTerminal({ agentId }: ChatTerminalProps): React.JSX.Element {
+function ChatTerminal({ agentId, showOrchestratorBlocks }: ChatTerminalProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const blocksRef = useRef<MessageBlock[]>([])
   const [version, setVersion] = useState(0)
@@ -89,7 +90,13 @@ function ChatTerminal({ agentId }: ChatTerminalProps): React.JSX.Element {
         {blocks.length === 0 ? (
           <div className="chat-terminal__empty">Waiting for agent output...</div>
         ) : (
-          blocks.map((block) => <BlockRenderer key={block.id} block={block} />)
+          blocks.map((block) => (
+            <BlockRenderer
+              key={block.id}
+              block={block}
+              showOrchestratorBlocks={showOrchestratorBlocks}
+            />
+          ))
         )}
       </div>
       {!autoScrollRef.current && blocks.length > 0 && (

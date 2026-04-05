@@ -106,6 +106,10 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
 
   private pendingPermissions = new Map<string, Deferred<PermissionResult>>()
   private pendingSecurityAlerts = new Map<string, Deferred<PermissionResult>>()
+  private pendingQuestions = new Map<
+    string,
+    { deferred: Deferred<PermissionResult>; toolInput: Record<string, unknown> }
+  >()
 
   /** Start a new CLI session. Resolves when the session completes or errors. */
   async startSession(options: CliSessionOptions): Promise<void> {
@@ -146,9 +150,10 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     } finally {
       this.queryHandle = null
       this.abortController = null
-      // Clean up any pending permissions/alerts that were orphaned (e.g., by abort)
+      // Clean up any pending permissions/alerts/questions that were orphaned (e.g., by abort)
       this.pendingPermissions.clear()
       this.pendingSecurityAlerts.clear()
+      this.pendingQuestions.clear()
     }
   }
 
@@ -160,7 +165,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     }
 
     if (response.behavior === 'allow') {
-      pending.resolve({ behavior: 'allow', updatedInput: response.updatedInput })
+      pending.resolve({ behavior: 'allow', updatedInput: response.updatedInput ?? {} })
     } else {
       pending.resolve({ behavior: 'deny', message: response.message ?? 'Denied by user' })
     }
@@ -174,14 +179,30 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     }
 
     if (response.behavior === 'override') {
-      pending.resolve({ behavior: 'allow' })
+      pending.resolve({ behavior: 'allow', updatedInput: {} })
     } else {
       pending.resolve({ behavior: 'deny', message: 'Dismissed by user (security alert)' })
     }
   }
 
-  /** Respond to an AskUserQuestion by sending a user message via streamInput. */
+  /** Respond to an AskUserQuestion — resolves the canUseTool deferred or falls back to streamInput. */
   async respondToUserQuestion(response: UserQuestionResponse): Promise<void> {
+    // Structured question path: resolve the canUseTool deferred with answers
+    const pending = this.pendingQuestions.get(response.requestId)
+    if (pending) {
+      const answers = response.answers ?? { [response.answer]: response.answer }
+      pending.deferred.resolve({
+        behavior: 'allow',
+        updatedInput: { ...pending.toolInput, answers }
+      })
+      this.pendingQuestions.delete(response.requestId)
+      if ((this.state as CliDriverState) === 'waiting_user_input') {
+        this.setState('running')
+      }
+      return
+    }
+
+    // Legacy streamInput path (STEP_DONE signaling via orchestration loop)
     if ((this.state as CliDriverState) !== 'waiting_user_input') {
       throw new Error(`Cannot respond to user question in state: ${this.state}`)
     }
@@ -274,13 +295,15 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
         case 'tool_progress':
           this.emit('tool:activity', {
             toolName: (message as { tool_name?: string }).tool_name ?? 'unknown',
-            elapsedSeconds: (message as { elapsed_time_seconds?: number }).elapsed_time_seconds ?? 0
+            elapsedSeconds: (message as { elapsed_time_seconds?: number }).elapsed_time_seconds ?? 0,
+            toolUseId: (message as { tool_use_id?: string }).tool_use_id ?? ''
           })
           break
 
         case 'tool_use_summary':
           this.emit('tool:summary', {
-            summary: (message as { summary?: string }).summary ?? ''
+            summary: (message as { summary?: string }).summary ?? '',
+            toolUseIds: (message as { preceding_tool_use_ids?: string[] }).preceding_tool_use_ids ?? []
           })
           break
 
@@ -323,7 +346,8 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     const content = message.message?.content
     if (!Array.isArray(content)) return
 
-    // Check for AskUserQuestion tool use
+    // Check for AskUserQuestion tool use — only handle STEP_DONE signaling here.
+    // Real/structured questions are handled in the canUseTool callback.
     const askBlock = content.find(
       (block: { type: string; name?: string }) =>
         block.type === 'tool_use' && block.name === 'AskUserQuestion'
@@ -331,14 +355,25 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
 
     if (askBlock && askBlock.type === 'tool_use') {
       const input = (askBlock as { input?: Record<string, unknown> }).input ?? {}
-      const request: UserQuestionRequest = {
-        requestId: randomUUID(),
-        question: typeof input.question === 'string' ? input.question : JSON.stringify(input),
-        toolUseId: (askBlock as { id: string }).id
+      // Check both simple `question` and structured `questions[0].question`
+      const simpleQuestion = typeof input.question === 'string' ? input.question : ''
+      const structuredQuestion =
+        Array.isArray(input.questions) && input.questions.length > 0
+          ? ((input.questions as { question?: string }[])[0]?.question ?? '')
+          : ''
+      const questionText = simpleQuestion || structuredQuestion
+
+      // Only emit for STEP_DONE — other questions were already handled in canUseTool
+      if (questionText.startsWith('STEP_DONE: ')) {
+        const request: UserQuestionRequest = {
+          requestId: randomUUID(),
+          question: questionText,
+          toolUseId: (askBlock as { id: string }).id
+        }
+        this.setState('waiting_user_input')
+        this.emit('user:question', request)
+        return
       }
-      this.setState('waiting_user_input')
-      this.emit('user:question', request)
-      return
     }
 
     // Normal assistant message — extract text and tool uses
@@ -349,7 +384,8 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
 
     const toolUses = content
       .filter((block: { type: string }) => block.type === 'tool_use')
-      .map((block: { name?: string; input?: Record<string, unknown> }) => ({
+      .map((block: { id?: string; name?: string; input?: Record<string, unknown> }) => ({
+        toolUseId: block.id ?? '',
         toolName: block.name ?? 'unknown',
         input: block.input ?? {}
       }))
@@ -358,7 +394,8 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
     for (const tu of toolUses) {
       const startEvent: ToolStartEvent = {
         toolName: tu.toolName,
-        inputSummary: summarizeToolInput(tu.toolName, tu.input)
+        inputSummary: summarizeToolInput(tu.toolName, tu.input),
+        toolUseId: tu.toolUseId
       }
       this.emit('tool:start', startEvent)
     }
@@ -415,6 +452,57 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
       input: Record<string, unknown>,
       options: { signal: AbortSignal; toolUseID: string; title?: string; displayName?: string; description?: string }
     ): Promise<PermissionResult> => {
+      // --- AskUserQuestion: intercept before approval logic ---
+      if (toolName === 'AskUserQuestion') {
+        // STEP_DONE signaling — auto-approve so handleAssistantMessage picks it up.
+        // Check both simple `question` string and structured `questions[0].question`.
+        const simpleQuestion = typeof input.question === 'string' ? input.question : ''
+        const structuredQuestion =
+          Array.isArray(input.questions) && input.questions.length > 0
+            ? (input.questions[0] as { question?: string })?.question ?? ''
+            : ''
+        const questionText = simpleQuestion || structuredQuestion
+        if (questionText.startsWith('STEP_DONE: ')) {
+          return { behavior: 'allow', updatedInput: input }
+        }
+
+        // Structured or real question — show UI and collect answers
+        const requestId = randomUUID()
+        const deferred = createDeferred<PermissionResult>()
+        this.pendingQuestions.set(requestId, { deferred, toolInput: input })
+
+        this.setState('waiting_user_input')
+
+        const questions = Array.isArray(input.questions) ? input.questions : undefined
+
+        const request: UserQuestionRequest = {
+          requestId,
+          question: questionText || 'Claude has a question',
+          toolUseId: options.toolUseID,
+          questions: questions as UserQuestionRequest['questions'],
+          toolInput: input
+        }
+        this.emit('user:question', request)
+
+        // Handle abort
+        const onAbort = (): void => {
+          if (this.pendingQuestions.has(requestId)) {
+            deferred.resolve({ behavior: 'deny', message: 'Aborted' })
+          }
+        }
+        options.signal.addEventListener('abort', onAbort, { once: true })
+
+        const result = await deferred.promise
+
+        options.signal.removeEventListener('abort', onAbort)
+        this.pendingQuestions.delete(requestId)
+        if ((this.state as CliDriverState) === 'waiting_user_input') {
+          this.setState('running')
+        }
+
+        return result
+      }
+
       const mode = sessionOptions.approvalMode ?? 'never'
       const inputSummary = summarizeToolInput(toolName, input)
 
@@ -425,7 +513,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
           toolName,
           inputSummary
         })
-        return { behavior: 'allow' }
+        return { behavior: 'allow', updatedInput: input }
       }
 
       // Smart LLM-based evaluation
@@ -443,7 +531,7 @@ export class CliDriver extends TypedEventEmitter<CliDriverEvents> {
               toolName,
               inputSummary
             })
-            return { behavior: 'allow' }
+            return { behavior: 'allow', updatedInput: input }
           }
           if (result.decision === 'no') {
             // Genuinely dangerous — halt and show security alert

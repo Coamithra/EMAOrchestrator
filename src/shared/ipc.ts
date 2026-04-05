@@ -114,6 +114,7 @@ export type CliEvent =
   | { type: 'session:result'; data: SessionResult }
   | { type: 'step:banner'; data: StepBannerEvent }
   | { type: 'approval:status'; data: ApprovalStatusEvent }
+  | { type: 'orchestrator:inject'; data: { variant: 'prompt' | 'permission-response' | 'question-response'; content: string } }
   | { type: 'error'; data: { message: string } }
 
 /** Payload shape for the cli:event channel. */
@@ -132,6 +133,7 @@ export type AgentEvent =
   | { type: 'agent:state-changed'; data: { agentId: string; stateSnapshot: AgentStateSnapshot } }
   | { type: 'agent:step-advanced'; data: { agentId: string; progress: AgentStepProgress } }
   | { type: 'agent:step-completed'; data: { agentId: string; progress: AgentStepProgress } }
+  | { type: 'agent:step-summary'; data: { agentId: string; phaseIndex: number; stepIndex: number; summary: string } }
   | {
       type: 'agent:phase-completed'
       data: { agentId: string; phaseName: string; phaseIndex: number }

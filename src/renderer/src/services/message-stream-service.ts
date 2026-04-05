@@ -72,6 +72,18 @@ function getLastToolBlock(agentId: string): ToolBlock | null {
   return null
 }
 
+function findToolBlock(agentId: string, toolUseId: string): ToolBlock | null {
+  if (!toolUseId) return getLastToolBlock(agentId)
+  const store = getStore(agentId)
+  for (let i = store.length - 1; i >= 0; i--) {
+    const block = store[i]
+    if (block.type === 'tool' && (block as ToolBlock).toolUseId === toolUseId) {
+      return block as ToolBlock
+    }
+  }
+  return null
+}
+
 /** Mark the last tool block as inactive if it's still running. Safety net for missing tool:summary. */
 function finalizeToolBlock(agentId: string): void {
   const tool = getLastToolBlock(agentId)
@@ -197,7 +209,7 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
       // If tool:activity already created a block (SDK yields tool_progress before
       // the assistant message), backfill the inputSummary instead of creating a
       // duplicate block.
-      const existingTool = getLastToolBlock(agentId)
+      const existingTool = findToolBlock(agentId, event.data.toolUseId)
       if (existingTool && !existingTool.inputSummary) {
         existingTool.inputSummary = event.data.inputSummary
         const store = getStore(agentId)
@@ -208,6 +220,7 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
         appendBlock(agentId, {
           type: 'tool',
           id: blockId(),
+          toolUseId: event.data.toolUseId,
           toolName: event.data.toolName,
           inputSummary: event.data.inputSummary,
           active: true,
@@ -219,7 +232,7 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
     }
 
     case 'tool:activity': {
-      let tool = getLastToolBlock(agentId)
+      let tool = findToolBlock(agentId, event.data.toolUseId)
       if (tool && tool.active) {
         tool.elapsedSeconds = event.data.elapsedSeconds
         const store = getStore(agentId)
@@ -234,6 +247,7 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
         appendBlock(agentId, {
           type: 'tool',
           id: blockId(),
+          toolUseId: event.data.toolUseId,
           toolName: event.data.toolName,
           inputSummary: '',
           active: true,
@@ -245,19 +259,35 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
     }
 
     case 'tool:summary': {
-      const tool = getLastToolBlock(agentId)
-      if (tool) {
-        tool.summary = event.data.summary
-        tool.active = false
+      // tool_use_summary may cover multiple tool calls
+      const ids = event.data.toolUseIds
+      if (ids.length > 0) {
         const store = getStore(agentId)
-        const idx = store.lastIndexOf(tool)
-        if (idx !== -1) notify(agentId, { type: 'block:updated', blockIndex: idx })
+        for (const tuId of ids) {
+          const tool = findToolBlock(agentId, tuId)
+          if (tool) {
+            tool.summary = event.data.summary
+            tool.active = false
+            const idx = store.lastIndexOf(tool)
+            if (idx !== -1) notify(agentId, { type: 'block:updated', blockIndex: idx })
+          }
+        }
+      } else {
+        // Fallback: no IDs available, use last tool block
+        const tool = getLastToolBlock(agentId)
+        if (tool) {
+          tool.summary = event.data.summary
+          tool.active = false
+          const store = getStore(agentId)
+          const idx = store.lastIndexOf(tool)
+          if (idx !== -1) notify(agentId, { type: 'block:updated', blockIndex: idx })
+        }
       }
       break
     }
 
     case 'tool:result': {
-      const tool = getLastToolBlock(agentId)
+      const tool = findToolBlock(agentId, event.data.toolUseId)
       if (tool) {
         tool.result = event.data.result
         const store = getStore(agentId)
@@ -303,6 +333,20 @@ function handleEvent(agentId: string, payload: CliEventPayload): void {
       // Do NOT finalizeToolBlock here — the tool is still running when the
       // assistant message arrives. The tool block is finalized by tool:summary,
       // tool:result, or the next stream:text / tool:start event.
+      break
+    }
+
+    case 'orchestrator:inject': {
+      flushMdBuffer(agentId)
+      finalizeTextBlock(agentId)
+      finalizeToolBlock(agentId)
+      appendBlock(agentId, {
+        type: 'orchestrator',
+        id: blockId(),
+        timestamp: Date.now(),
+        variant: event.data.variant,
+        content: event.data.content
+      })
       break
     }
 

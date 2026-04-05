@@ -450,11 +450,42 @@ describe('CliDriver', () => {
   })
 
   describe('AskUserQuestion', () => {
-    it('detects AskUserQuestion and emits user:question', async () => {
+    it('detects AskUserQuestion via canUseTool and emits user:question', async () => {
       const questions: UserQuestionRequest[] = []
-      driver.on('user:question', (q) => questions.push(q))
+      driver.on('user:question', (q) => {
+        questions.push(q)
+        // Respond immediately so the session completes
+        driver.respondToUserQuestion({
+          requestId: q.requestId,
+          answer: 'Option A',
+          answers: { 'Which approach do you prefer?': 'Option A' }
+        })
+      })
 
-      mockMessages = [systemInitMessage(), askUserQuestionMessage(), resultMessage()]
+      const { query: mockQuery } = await import('@anthropic-ai/claude-agent-sdk')
+      vi.mocked(mockQuery).mockImplementationOnce(({ options }) => {
+        const canUseTool = options?.canUseTool
+        const gen = (async function* () {
+          yield systemInitMessage()
+          if (canUseTool) {
+            await canUseTool(
+              'AskUserQuestion',
+              { question: 'Which approach do you prefer?' },
+              { signal: new AbortController().signal, toolUseID: 'toolu_ask_1' }
+            )
+          }
+          yield resultMessage()
+        })()
+        return Object.assign(gen, {
+          interrupt: vi.fn(), close: vi.fn(), streamInput: vi.fn(),
+          setPermissionMode: vi.fn(), setModel: vi.fn(), setMaxThinkingTokens: vi.fn(),
+          initializationResult: vi.fn(), supportedCommands: vi.fn(), supportedModels: vi.fn(),
+          supportedAgents: vi.fn(), mcpServerStatus: vi.fn(), accountInfo: vi.fn(),
+          rewindFiles: vi.fn(), seedReadState: vi.fn(), reconnectMcpServer: vi.fn(),
+          toggleMcpServer: vi.fn(), setMcpServers: vi.fn(), stopTask: vi.fn(),
+          applyFlagSettings: vi.fn()
+        })
+      })
 
       await driver.startSession({ prompt: 'Decide', cwd: '/test' })
 
@@ -467,51 +498,64 @@ describe('CliDriver', () => {
     it('transitions to waiting_user_input state', async () => {
       const states: CliDriverState[] = []
       driver.on('state:changed', (s) => states.push(s))
+      driver.on('user:question', (q) => {
+        driver.respondToUserQuestion({ requestId: q.requestId, answer: 'OK' })
+      })
 
-      mockMessages = [systemInitMessage(), askUserQuestionMessage(), resultMessage()]
+      const { query: mockQuery } = await import('@anthropic-ai/claude-agent-sdk')
+      vi.mocked(mockQuery).mockImplementationOnce(({ options }) => {
+        const canUseTool = options?.canUseTool
+        const gen = (async function* () {
+          yield systemInitMessage()
+          if (canUseTool) {
+            await canUseTool(
+              'AskUserQuestion',
+              { question: 'Which approach do you prefer?' },
+              { signal: new AbortController().signal, toolUseID: 'toolu_ask_1' }
+            )
+          }
+          yield resultMessage()
+        })()
+        return Object.assign(gen, {
+          interrupt: vi.fn(), close: vi.fn(), streamInput: vi.fn(),
+          setPermissionMode: vi.fn(), setModel: vi.fn(), setMaxThinkingTokens: vi.fn(),
+          initializationResult: vi.fn(), supportedCommands: vi.fn(), supportedModels: vi.fn(),
+          supportedAgents: vi.fn(), mcpServerStatus: vi.fn(), accountInfo: vi.fn(),
+          rewindFiles: vi.fn(), seedReadState: vi.fn(), reconnectMcpServer: vi.fn(),
+          toggleMcpServer: vi.fn(), setMcpServers: vi.fn(), stopTask: vi.fn(),
+          applyFlagSettings: vi.fn()
+        })
+      })
 
       await driver.startSession({ prompt: 'Decide', cwd: '/test' })
 
       expect(states).toContain('waiting_user_input')
     })
 
-    it('respondToUserQuestion calls streamInput and resumes running', async () => {
+    it('respondToUserQuestion resolves canUseTool deferred and returns answers', async () => {
       const { query: mockQuery } = await import('@anthropic-ai/claude-agent-sdk')
-      const mockStreamInput = vi.fn()
+      let sdkResult: { behavior: string; updatedInput?: unknown } | null = null
 
-      // Use a deferred to pause the generator after askUserQuestion
-      let resumeGenerator!: () => void
-      const pausePromise = new Promise<void>((r) => {
-        resumeGenerator = r
-      })
-
-      vi.mocked(mockQuery).mockImplementationOnce(() => {
+      vi.mocked(mockQuery).mockImplementationOnce(({ options }) => {
+        const canUseTool = options?.canUseTool
         const gen = (async function* () {
           yield systemInitMessage()
-          yield askUserQuestionMessage()
-          // Pause here — simulates SDK waiting for user response
-          await pausePromise
+          if (canUseTool) {
+            sdkResult = await canUseTool(
+              'AskUserQuestion',
+              { question: 'Which approach do you prefer?' },
+              { signal: new AbortController().signal, toolUseID: 'toolu_ask_1' }
+            )
+          }
           yield resultMessage()
         })()
         return Object.assign(gen, {
-          interrupt: vi.fn(),
-          close: vi.fn(),
-          streamInput: mockStreamInput,
-          setPermissionMode: vi.fn(),
-          setModel: vi.fn(),
-          setMaxThinkingTokens: vi.fn(),
-          initializationResult: vi.fn(),
-          supportedCommands: vi.fn(),
-          supportedModels: vi.fn(),
-          supportedAgents: vi.fn(),
-          mcpServerStatus: vi.fn(),
-          accountInfo: vi.fn(),
-          rewindFiles: vi.fn(),
-          seedReadState: vi.fn(),
-          reconnectMcpServer: vi.fn(),
-          toggleMcpServer: vi.fn(),
-          setMcpServers: vi.fn(),
-          stopTask: vi.fn(),
+          interrupt: vi.fn(), close: vi.fn(), streamInput: vi.fn(),
+          setPermissionMode: vi.fn(), setModel: vi.fn(), setMaxThinkingTokens: vi.fn(),
+          initializationResult: vi.fn(), supportedCommands: vi.fn(), supportedModels: vi.fn(),
+          supportedAgents: vi.fn(), mcpServerStatus: vi.fn(), accountInfo: vi.fn(),
+          rewindFiles: vi.fn(), seedReadState: vi.fn(), reconnectMcpServer: vi.fn(),
+          toggleMcpServer: vi.fn(), setMcpServers: vi.fn(), stopTask: vi.fn(),
           applyFlagSettings: vi.fn()
         })
       })
@@ -523,22 +567,29 @@ describe('CliDriver', () => {
 
       const sessionPromise = driver.startSession({ prompt: 'Decide', cwd: '/test' })
 
-      // Wait a tick for the generator to yield the askUserQuestion message
+      // Wait a tick for the generator to reach canUseTool
       await new Promise((resolve) => setTimeout(resolve, 10))
 
       expect(driver.getState()).toBe('waiting_user_input')
 
       await driver.respondToUserQuestion({
         requestId: questionRequestId,
-        answer: 'Option A'
+        answer: 'Option A',
+        answers: { 'Which approach do you prefer?': 'Option A' }
       })
 
-      expect(mockStreamInput).toHaveBeenCalledTimes(1)
       expect(driver.getState()).toBe('running')
 
-      // Unblock the generator so session completes
-      resumeGenerator()
       await sessionPromise
+
+      // canUseTool should have returned the answers via updatedInput
+      expect(sdkResult).toEqual({
+        behavior: 'allow',
+        updatedInput: {
+          question: 'Which approach do you prefer?',
+          answers: { 'Which approach do you prefer?': 'Option A' }
+        }
+      })
     })
 
     it('respondToUserQuestion throws if not in waiting_user_input state', async () => {

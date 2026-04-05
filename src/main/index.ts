@@ -76,6 +76,11 @@ function wireAgentEventForwarding(): void {
   agentManager.on('agent:step-completed', (agentId, progress) => {
     broadcastAgentEvent({ event: { type: 'agent:step-completed', data: { agentId, progress } } })
   })
+  agentManager.on('agent:step-summary', (agentId, phaseIndex, stepIndex, summary) => {
+    broadcastAgentEvent({
+      event: { type: 'agent:step-summary', data: { agentId, phaseIndex, stepIndex, summary } }
+    })
+  })
   agentManager.on('agent:phase-completed', (agentId, phaseName, phaseIndex) => {
     broadcastAgentEvent({
       event: { type: 'agent:phase-completed', data: { agentId, phaseName, phaseIndex } }

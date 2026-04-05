@@ -234,6 +234,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
   /** Set a per-agent approval mode override. Pass null to revert to the global default. */
   setAgentApprovalMode(agentId: string, mode: ApprovalMode | null): void {
+    this.agentManager.setApprovalModeOverride(agentId, mode)
     const entry = this.running.get(agentId)
     if (entry) {
       entry.approvalModeOverride = mode
@@ -242,8 +243,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
   /** Get the effective approval mode for an agent (per-agent override or global default). */
   getAgentApprovalMode(agentId: string): ApprovalMode {
-    const entry = this.running.get(agentId)
-    return entry?.approvalModeOverride ?? this.approvalMode
+    return this.agentManager.getApprovalModeOverride(agentId) ?? this.approvalMode
   }
 
   /**
@@ -280,7 +280,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       stuckNotified: false,
       stuckCheckInterval: null,
       stepStartedAt: Date.now(),
-      approvalModeOverride: null
+      approvalModeOverride: this.agentManager.getApprovalModeOverride(agentId)
     }
     this.running.set(agentId, entry)
 
@@ -427,7 +427,7 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       stuckNotified: false,
       stuckCheckInterval: null,
       stepStartedAt: Date.now(),
-      approvalModeOverride: null
+      approvalModeOverride: this.agentManager.getApprovalModeOverride(agentId)
     }
     this.running.set(agentId, entry)
 
@@ -1210,6 +1210,8 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
       push({ type: 'security:alert', data: request })
     })
     driver.on('user:question', (request) => {
+      // Don't forward STEP_DONE to the renderer — handled internally by the orchestration loop
+      if (request.question.startsWith('STEP_DONE: ')) return
       push({ type: 'user:question', data: request })
     })
     driver.on('session:result', (result) => {

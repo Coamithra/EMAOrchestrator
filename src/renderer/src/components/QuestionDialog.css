@@ -7,6 +7,13 @@
   color: #3b82f6;
 }
 
+/* Allow the card to grow for structured questions */
+.question-dialog__card {
+  width: 480px;
+}
+
+/* --- Simple text question (legacy) --- */
+
 .question-dialog__question {
   font-size: 13px;
   color: var(--ev-c-text-1);
@@ -33,5 +40,119 @@
 }
 
 .question-dialog__input::placeholder {
+  color: var(--ev-c-text-3);
+}
+
+/* --- Structured questions --- */
+
+.question-dialog__structured-question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.question-dialog__structured-question + .question-dialog__structured-question {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ev-c-gray-3);
+}
+
+.question-dialog__sq-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ev-c-text-3);
+}
+
+.question-dialog__sq-text {
+  font-size: 13px;
+  color: var(--ev-c-text-1);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+/* Option list */
+
+.question-dialog__options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.question-dialog__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 6px;
+  background: var(--color-background-mute);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+  color: var(--ev-c-text-1);
+}
+
+.question-dialog__option:hover {
+  border-color: var(--ev-c-text-3);
+}
+
+.question-dialog__option--selected {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.question-dialog__option-indicator {
+  flex-shrink: 0;
+  font-size: 15px;
+  line-height: 1;
+  margin-top: 1px;
+  color: var(--ev-c-text-3);
+}
+
+.question-dialog__option--selected .question-dialog__option-indicator {
+  color: #3b82f6;
+}
+
+.question-dialog__option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.question-dialog__option-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ev-c-text-1);
+}
+
+.question-dialog__option-desc {
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+  line-height: 1.4;
+}
+
+/* "Other" free-text input below the options */
+
+.question-dialog__other-input {
+  margin-top: 4px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--ev-c-text-1);
+  background: var(--color-background-mute);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 4px;
+  outline: none;
+}
+
+.question-dialog__other-input:focus {
+  border-color: #3b82f6;
+}
+
+.question-dialog__other-input::placeholder {
   color: var(--ev-c-text-3);
 }
