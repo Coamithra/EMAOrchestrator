@@ -8,7 +8,7 @@ import MainLayout from './components/MainLayout'
 import NewAgentDialog from './components/NewAgentDialog'
 import RunbookView from './components/RunbookView'
 import StepReportView from './components/StepReportView'
-import { initMessageStream, clearBlocks } from './services/message-stream-service'
+import { initMessageStream, clearBlocks, replayEvents } from './services/message-stream-service'
 
 type View = 'loading' | 'settings' | 'main' | 'runbook' | 'step-report'
 
@@ -181,6 +181,18 @@ function App(): React.JSX.Element {
     window.api
       .listAgents()
       .then(async (loadedAgents) => {
+        // Replay persisted block events for restored agents so terminal output
+        // is visible immediately, even after an app restart.
+        await Promise.all(
+          loadedAgents.map(async (a) => {
+            try {
+              const events = await window.api.getBlockEvents(a.id)
+              if (events.length > 0) replayEvents(a.id, events)
+            } catch {
+              // No persisted events — that's fine
+            }
+          })
+        )
         setAgents(loadedAgents)
         // Check which agents are currently running
         const running = new Set<string>()

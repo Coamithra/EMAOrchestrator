@@ -14,6 +14,7 @@ import { parseRunbookSmart } from './smart-runbook-parser'
 import { getCachedRunbook, cacheRunbook } from './runbook-cache'
 import { getListsForBoard, getCardsFromList, moveCardToSourceList } from './trello-service'
 import { readAgentLog } from './logging-service'
+import { readBlockEvents, removeBlockEvents } from './block-persistence-service'
 import type { AgentManager } from './agent-manager'
 import type { CardInfo } from '../shared/agent-manager'
 import type { OrchestrationLoop } from './orchestration-loop'
@@ -243,11 +244,13 @@ export function registerIpcHandlers(
       }
       if (config?.targetRepoPath) {
         await agentManager.destroyAgent(agentId, config.targetRepoPath)
+        removeBlockEvents(agentId).catch(() => {})
         return // destroyAgent already calls removePersistedAgent
       }
     }
     // Agent not in memory (stale) — just remove from disk
     await removePersistedAgent(agentId)
+    removeBlockEvents(agentId).catch(() => {})
   })
 
   // ---------------------------------------------------------------------------
@@ -377,6 +380,14 @@ export function registerIpcHandlers(
       })
     )
     return results.flat()
+  })
+
+  // ---------------------------------------------------------------------------
+  // Block Persistence
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle(IpcChannels.BLOCKS_GET_EVENTS, async (_event, agentId: string) => {
+    return await readBlockEvents(agentId)
   })
 
   // ---------------------------------------------------------------------------

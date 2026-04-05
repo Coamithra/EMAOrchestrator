@@ -3,6 +3,7 @@ import type { AppConfig, ValidationResult } from '../shared/config'
 import type {
   AgentAPI,
   AgentCreateAPI,
+  BlockPersistenceAPI,
   PersistenceAPI,
   OrchestrationAPI,
   TrelloAPI,
@@ -22,6 +23,6 @@ interface ConfigAPI {
 declare global {
   interface Window {
     electron: ElectronAPI
-    api: ConfigAPI & AgentAPI & AgentCreateAPI & PersistenceAPI & OrchestrationAPI & TrelloAPI & LoggingAPI & RunbookAPI
+    api: ConfigAPI & AgentAPI & AgentCreateAPI & BlockPersistenceAPI & PersistenceAPI & OrchestrationAPI & TrelloAPI & LoggingAPI & RunbookAPI
   }
 }

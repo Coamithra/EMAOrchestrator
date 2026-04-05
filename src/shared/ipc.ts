@@ -86,6 +86,9 @@ export const IpcChannels = {
   TRELLO_GET_LISTS_FOR_BOARD: 'trello:getListsForBoard',
   TRELLO_GET_BACKLOG_CARDS: 'trello:getBacklogCards',
 
+  // Block persistence
+  BLOCKS_GET_EVENTS: 'blocks:getEvents',
+
   // Logging
   LOGGING_GET_LOG: 'logging:getLog',
 
@@ -210,6 +213,11 @@ export interface TrelloAPI {
   getTrelloLists(): Promise<TrelloList[]>
   getTrelloListsForBoard(boardId: string, apiKey: string, apiToken: string): Promise<TrelloList[]>
   getTrelloBacklogCards(): Promise<TrelloCard[]>
+}
+
+/** Block persistence API exposed to the renderer. */
+export interface BlockPersistenceAPI {
+  getBlockEvents(agentId: string): Promise<CliEventPayload[]>
 }
 
 /** Logging API exposed to the renderer. */

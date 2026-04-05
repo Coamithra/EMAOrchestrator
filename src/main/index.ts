@@ -14,6 +14,7 @@ import {
 import { loadConfig } from './config-service'
 import { cleanupOrphanedWorktrees } from './worktree-manager'
 import { moveCardToSourceList } from './trello-service'
+import { removeBlockEvents } from './block-persistence-service'
 import { IpcChannels, type AgentEventPayload } from '../shared/ipc'
 
 const agentManager = new AgentManager()
@@ -151,6 +152,7 @@ async function restorePersistedAgents(): Promise<void> {
         ).catch(() => {})
       }
       // Remove stale agents from the store
+      removeBlockEvents(result.agentId).catch(() => {})
       delete store.agents[result.agentId]
       continue
     }

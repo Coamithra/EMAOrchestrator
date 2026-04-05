@@ -387,6 +387,29 @@ export function subscribe(agentId: string, cb: (update: BlockUpdate) => void): (
   }
 }
 
+/**
+ * Replay persisted CLI events to rebuild blocks for an agent.
+ * Called on app startup for restored agents. Events are processed synchronously
+ * through handleEvent(), then the markdown buffer is flushed and any open
+ * text/tool blocks are finalized (since the session is no longer streaming).
+ */
+export function replayEvents(agentId: string, payloads: CliEventPayload[]): void {
+  // Clear any existing blocks first (idempotent replay)
+  stores.delete(agentId)
+  clearMdTimer(agentId)
+  mdBuffers.delete(agentId)
+
+  for (const payload of payloads) {
+    handleEvent(agentId, payload)
+  }
+
+  // Flush any remaining buffered text (the 30ms timer won't fire synchronously)
+  flushMdBuffer(agentId)
+  // Finalize any open streaming blocks — the session is over
+  finalizeTextBlock(agentId)
+  finalizeToolBlock(agentId)
+}
+
 /** Clear an agent's blocks and pending state. Call on agent destroy. */
 export function clearBlocks(agentId: string): void {
   stores.delete(agentId)

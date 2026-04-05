@@ -99,6 +99,10 @@ const api = {
   getTrelloBacklogCards: (): Promise<unknown> =>
     ipcRenderer.invoke(IpcChannels.TRELLO_GET_BACKLOG_CARDS),
 
+  // Block persistence
+  getBlockEvents: (agentId: string): Promise<unknown> =>
+    ipcRenderer.invoke(IpcChannels.BLOCKS_GET_EVENTS, agentId),
+
   // Logging
   getAgentLog: (agentId: string): Promise<unknown> =>
     ipcRenderer.invoke(IpcChannels.LOGGING_GET_LOG, agentId),

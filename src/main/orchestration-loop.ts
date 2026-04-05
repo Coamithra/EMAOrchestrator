@@ -6,6 +6,7 @@ import { moveCard, addComment } from './trello-service'
 import { loadConfig } from './config-service'
 import { generateToolPattern, addAllowedToolPattern } from './permission-settings-service'
 import { appendLogEntry } from './logging-service'
+import { appendBlockEvent } from './block-persistence-service'
 import { createTrackerDoc, checkOffStep, removeTrackerDoc } from './tracker-doc-service'
 import type { AgentManager } from './agent-manager'
 import type {
@@ -355,16 +356,18 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
 
     // Emit a banner so the user sees this is a direct prompt, not a runbook step
     const renderSessionId = `orchestration-${agentId}`
+    const directPromptPayload: CliEventPayload = {
+      sessionId: renderSessionId,
+      event: {
+        type: 'stream:text' as const,
+        data: { text: '\n--- Direct prompt ---\n' }
+      }
+    }
     const win = BrowserWindow.getAllWindows()[0]
     if (win && !win.isDestroyed()) {
-      win.webContents.send('cli:event', {
-        sessionId: renderSessionId,
-        event: {
-          type: 'stream:text' as const,
-          data: { text: '\n--- Direct prompt ---\n' }
-        }
-      } satisfies CliEventPayload)
+      win.webContents.send('cli:event', directPromptPayload)
     }
+    appendBlockEvent(agentId, directPromptPayload)
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -1020,16 +1023,18 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     content: string
   ): void {
     const sessionId = `orchestration-${agentId}`
-    const win = BrowserWindow.getAllWindows()[0]
-    if (!win || win.isDestroyed()) return
-
-    win.webContents.send('cli:event', {
+    const payload: CliEventPayload = {
       sessionId,
       event: {
         type: 'orchestrator:inject' as const,
         data: { variant, content }
       }
-    } satisfies CliEventPayload)
+    }
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('cli:event', payload)
+    }
+    appendBlockEvent(agentId, payload)
   }
 
   /** Push a structured step banner to the renderer. */
@@ -1040,13 +1045,10 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     stepTitle: string
   ): void {
     const sessionId = `orchestration-${agentId}`
-    const win = BrowserWindow.getAllWindows()[0]
-    if (!win || win.isDestroyed()) return
-
     const totalSteps =
       this.agentManager.getRunbook(agentId)?.phases[snapshot.phaseIndex]?.steps.length ?? '?'
 
-    win.webContents.send('cli:event', {
+    const payload: CliEventPayload = {
       sessionId,
       event: {
         type: 'step:banner' as const,
@@ -1059,7 +1061,12 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
           stepTitle
         }
       }
-    } satisfies CliEventPayload)
+    }
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('cli:event', payload)
+    }
+    appendBlockEvent(agentId, payload)
   }
 
   // ---------------------------------------------------------------------------
@@ -1170,10 +1177,12 @@ export class OrchestrationLoop extends TypedEventEmitter<OrchestrationLoopEvents
     // Look up window at push-time so events reach a new window if the
     // original was closed and re-opened (e.g., macOS activate).
     const push = (event: CliEventPayload['event']): void => {
+      const payload: CliEventPayload = { sessionId, event }
       const win = BrowserWindow.getAllWindows()[0]
       if (win && !win.isDestroyed()) {
-        win.webContents.send('cli:event', { sessionId, event } satisfies CliEventPayload)
+        win.webContents.send('cli:event', payload)
       }
+      appendBlockEvent(agentId, payload)
     }
 
     driver.on('state:changed', (state, previousState) => {
