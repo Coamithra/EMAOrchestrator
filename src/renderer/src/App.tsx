@@ -7,9 +7,10 @@ import Settings from './components/Settings'
 import MainLayout from './components/MainLayout'
 import NewAgentDialog from './components/NewAgentDialog'
 import RunbookView from './components/RunbookView'
+import StepReportView from './components/StepReportView'
 import { initMessageStream, clearBlocks } from './services/message-stream-service'
 
-type View = 'loading' | 'settings' | 'main' | 'runbook'
+type View = 'loading' | 'settings' | 'main' | 'runbook' | 'step-report'
 
 function App(): React.JSX.Element {
   const [view, setView] = useState<View>('loading')
@@ -18,6 +19,7 @@ function App(): React.JSX.Element {
   const [runningAgentIds, setRunningAgentIds] = useState<Set<string>>(new Set())
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false)
   const [pendingSelectAgentId, setPendingSelectAgentId] = useState<string | null>(null)
+  const [reportAgentId, setReportAgentId] = useState<string | null>(null)
 
   // Initialize message stream early so it captures events for all agents,
   // even before any ChatTerminal is mounted. Runs once on app startup.
@@ -250,6 +252,10 @@ function App(): React.JSX.Element {
 
   const handleSettingsClick = useCallback(() => setView('settings'), [])
   const handleRunbookClick = useCallback(() => setView('runbook'), [])
+  const handleViewStepReport = useCallback((agentId: string) => {
+    setReportAgentId(agentId)
+    setView('step-report')
+  }, [])
 
   if (view === 'loading') {
     return <div style={{ padding: '2rem', color: 'var(--ev-c-text-2)' }}>Loading...</div>
@@ -279,6 +285,24 @@ function App(): React.JSX.Element {
     )
   }
 
+  if (view === 'step-report') {
+    const reportAgent = agents.find((a) => a.id === reportAgentId)
+    if (!reportAgent) {
+      setView('main')
+      return null
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <TopBar
+          onNewAgentClick={handleNewAgentClick}
+          onSettingsClick={handleSettingsClick}
+          onRunbookClick={handleRunbookClick}
+        />
+        <StepReportView agent={reportAgent} onBack={() => setView('main')} />
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <TopBar
@@ -293,6 +317,7 @@ function App(): React.JSX.Element {
         onResumeAgent={handleResumeAgent}
         onStopAgent={handleStopAgent}
         onDismissAgent={handleDismissAgent}
+        onViewStepReport={handleViewStepReport}
       />
       {showNewAgentDialog && (
         <NewAgentDialog

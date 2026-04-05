@@ -16,9 +16,10 @@ interface MainLayoutProps {
   onResumeAgent: (agentId: string) => void
   onStopAgent: (agentId: string) => void
   onDismissAgent: (agentId: string) => void
+  onViewStepReport?: (agentId: string) => void
 }
 
-function MainLayout({ agents, runningAgentIds, pendingSelectAgentId, onResumeAgent, onStopAgent, onDismissAgent }: MainLayoutProps): React.JSX.Element {
+function MainLayout({ agents, runningAgentIds, pendingSelectAgentId, onResumeAgent, onStopAgent, onDismissAgent, onViewStepReport }: MainLayoutProps): React.JSX.Element {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -122,6 +123,7 @@ function MainLayout({ agents, runningAgentIds, pendingSelectAgentId, onResumeAge
           showOrchestratorBlocks
           onResume={onResumeAgent}
           onStop={onStopAgent}
+          onViewStepReport={onViewStepReport}
         />
       </div>
     </div>

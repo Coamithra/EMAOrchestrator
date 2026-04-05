@@ -42,6 +42,15 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // Intercept in-page link clicks (e.g. <a href>) that would navigate the
+  // Electron window away from the app. Open them in the default browser instead.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    // Allow dev-server reloads but block everything else
+    if (is.dev && url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '')) return
+    event.preventDefault()
+    shell.openExternal(url)
+  })
+
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

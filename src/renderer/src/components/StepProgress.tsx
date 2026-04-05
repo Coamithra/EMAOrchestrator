@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useRef, useEffect } from 'react'
 import type { AgentStateSnapshot } from '@shared/agent-state'
 import type { StepCompletionRecord } from '@shared/agent-persistence'
 import './StepProgress.css'
@@ -8,6 +8,8 @@ interface StepProgressProps {
   stepHistory: StepCompletionRecord[]
   /** Parsed runbook phases — needed for step titles since stateSnapshot only has indices. */
   phases: PhaseInfo[]
+  /** Called when the user selects "View Full Report" from the context menu. */
+  onViewReport?: () => void
 }
 
 /** Minimal phase info derived from the agent's runbook. */
@@ -72,11 +74,16 @@ function statusIcon(status: StepStatus): string {
 function StepProgress({
   stateSnapshot,
   stepHistory,
-  phases
+  phases,
+  onViewReport
 }: StepProgressProps): React.JSX.Element {
   // Track which phases the user has manually toggled. The current active
   // phase is auto-expanded unless the user explicitly collapses it.
   const [manualToggles, setManualToggles] = useState<Record<number, boolean>>({})
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   function isPhaseExpanded(phaseIndex: number): boolean {
     if (phaseIndex in manualToggles) return manualToggles[phaseIndex]
@@ -93,8 +100,36 @@ function StepProgress({
     [stateSnapshot.phaseIndex]
   )
 
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onViewReport) return
+      e.preventDefault()
+      setContextMenu({ x: e.clientX, y: e.clientY })
+    },
+    [onViewReport]
+  )
+
+  // Close context menu on outside click or Escape
+  useEffect(() => {
+    if (!contextMenu) return
+    function handleClick(e: MouseEvent): void {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu(null)
+      }
+    }
+    function handleKey(e: KeyboardEvent): void {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [contextMenu])
+
   return (
-    <div className="step-progress">
+    <div className="step-progress" onContextMenu={handleContextMenu}>
       {phases.map((phase, pi) => {
         const phaseStatus = getPhaseStatus(pi, stateSnapshot)
         const expanded = isPhaseExpanded(pi)
@@ -131,7 +166,12 @@ function StepProgress({
                       <div className="step-progress__step-content">
                         <div className="step-progress__step-title">{step.title}</div>
                         {summary && (
-                          <div className="step-progress__step-summary">{summary}</div>
+                          <div
+                            className="step-progress__step-summary"
+                            data-tooltip={summary}
+                          >
+                            {summary}
+                          </div>
                         )}
                       </div>
                     </li>
@@ -142,6 +182,23 @@ function StepProgress({
           </div>
         )
       })}
+      {contextMenu && (
+        <div
+          ref={menuRef}
+          className="step-progress__context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          <button
+            className="step-progress__context-menu-item"
+            onClick={() => {
+              setContextMenu(null)
+              onViewReport?.()
+            }}
+          >
+            View Full Report
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -17,6 +17,7 @@ interface AgentDetailPanelProps {
   showOrchestratorBlocks?: boolean
   onResume?: (agentId: string) => void
   onStop?: (agentId: string) => void
+  onViewStepReport?: (agentId: string) => void
 }
 
 function toPhaseInfos(agent: AgentSnapshot): PhaseInfo[] {
@@ -50,7 +51,7 @@ function canStop(isRunning: boolean): boolean {
   return isRunning
 }
 
-function AgentDetailPanel({ agent, isRunning = false, showOrchestratorBlocks, onResume, onStop }: AgentDetailPanelProps): React.JSX.Element {
+function AgentDetailPanel({ agent, isRunning = false, showOrchestratorBlocks, onResume, onStop, onViewStepReport }: AgentDetailPanelProps): React.JSX.Element {
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null)
   const [pendingSecurityAlert, setPendingSecurityAlert] = useState<SecurityAlertRequest | null>(null)
   const [pendingQuestion, setPendingQuestion] = useState<UserQuestionRequest | null>(null)
@@ -226,6 +227,7 @@ function AgentDetailPanel({ agent, isRunning = false, showOrchestratorBlocks, on
             stateSnapshot={agent.stateSnapshot}
             stepHistory={agent.stepHistory}
             phases={phases}
+            onViewReport={onViewStepReport ? () => onViewStepReport(agent.id) : undefined}
           />
         </div>
         <div className="agent-detail-panel__terminal">
@@ -233,10 +235,7 @@ function AgentDetailPanel({ agent, isRunning = false, showOrchestratorBlocks, on
           <ConsoleInput
             key={agent.id}
             agentId={agent.id}
-            disabled={
-              agent.stateSnapshot.state === 'done' ||
-              agent.stateSnapshot.state === 'waiting_for_human'
-            }
+            disabled={agent.stateSnapshot.state === 'done'}
           />
           {isRunning && pendingPermission && (
             <PermissionDialog

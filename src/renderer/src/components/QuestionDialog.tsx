@@ -126,17 +126,21 @@ function QuestionDialog({ request, onRespond }: QuestionDialogProps): React.JSX.
       setSelections((prev) => {
         const current = new Set(prev[questionText])
         if (label === '__other__') {
-          // Toggle other
+          // Toggle other — never clears regular options
           if (current.has(label)) {
             current.delete(label)
           } else {
-            if (!multiSelect) current.clear()
             current.add(label)
           }
         } else if (current.has(label)) {
           current.delete(label)
         } else {
-          if (!multiSelect) current.clear()
+          if (!multiSelect) {
+            // Clear other regular options but preserve __other__
+            const hadOther = current.has('__other__')
+            current.clear()
+            if (hadOther) current.add('__other__')
+          }
           current.add(label)
         }
         return { ...prev, [questionText]: current }
@@ -163,6 +167,8 @@ function QuestionDialog({ request, onRespond }: QuestionDialogProps): React.JSX.
       const sel = selections[sq.question]
       if (!sel || sel.size === 0) return
 
+      const regularLabels = Array.from(sel).filter((l) => l !== '__other__')
+
       if (sel.has('__other__')) {
         // Use the Other text input value
         const otherInput = document.querySelector(
@@ -170,17 +176,16 @@ function QuestionDialog({ request, onRespond }: QuestionDialogProps): React.JSX.
         ) as HTMLInputElement | null
         const otherVal = otherInput?.value?.trim() || otherTexts[sq.question]?.trim() || ''
         if (otherVal) {
-          // Combine with any other selected labels
-          const labels = Array.from(sel)
-            .filter((l) => l !== '__other__')
-            .concat(otherVal)
-          answers[sq.question] = labels.join(', ')
+          answers[sq.question] = regularLabels.concat(otherVal).join(', ')
+        } else if (regularLabels.length > 0) {
+          // Other is open but empty — just use the selected options
+          answers[sq.question] = regularLabels.join(', ')
         } else {
-          // Other selected but empty — skip (can't submit)
+          // Only Other selected with no text — can't submit
           return
         }
       } else {
-        answers[sq.question] = Array.from(sel).join(', ')
+        answers[sq.question] = regularLabels.join(', ')
       }
     }
     onRespond({
