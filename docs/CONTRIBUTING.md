@@ -1,6 +1,6 @@
 # Contributing: Tackling a Trello Card
 
-Step-by-step workflow for picking up and completing any card from the [EMAOrchestrator Trello board](https://trello.com/b/MibMpIB8/emaorchestrator).
+Step-by-step workflow for picking up and completing any card from the [EMAOrchestrator Trello board](https://trello.com/b/MibMpIB8/emaorchestrator) (board id `69c42227`). Board commands below use the `trello` CLI.
 
 ---
 
@@ -31,7 +31,7 @@ git checkout main && git pull origin main  # fast-forward local main to the merg
 ## Phase 1: Pick Up the Card
 - [ ] Pull latest main
 - [ ] Read the card (description, comments, linked docs)
-- [ ] Move card to In Progress
+- [ ] Claim the top card with `trello grab` (or move a specific card to In Progress)
 - [ ] Create worktree and branch
 
 ## Phase 2: Research
@@ -64,9 +64,17 @@ All work happens in an isolated **git worktree** as a sibling directory to `main
 
 ## Phase 1: Pick Up the Card
 
+> **Picking up the top card? Use the atomic `grab` command.** When you are told to "pick up the top card/ticket" (rather than a specific named card), claim the top of the Backlog in one step:
+>
+> ```
+> trello --board 69c42227 grab --from "Backlog" --to "In Progress"
+> ```
+>
+> This pops the top card of Backlog, moves it to In Progress, and prints the card it got you (it exits 1 when Backlog is empty). It is safe to fire from several agents at once: each gets a distinct card, so no two collide on the same ticket. On the remote Trello backend `grab` settles ties with a brief (~10-30s) claim-comment handshake. For a specific named card, use the manual move in step 3 instead.
+
 1. **Pull latest main** — `git pull origin main` to ensure you're working from the newest code
 2. **Read the card** — Read the full card description, comments, and any linked docs (e.g. spike docs in `docs/`)
-3. **Move card to In Progress** — `move_card` to the "In Progress" list
+3. **Move card to In Progress** — `trello --board 69c42227 card move <card_id> "In Progress"`
 4. **Create worktree and branch** — Branch off `main` with a descriptive name:
     - Bugs: `fix/card-name` (e.g. `fix/terminal-render-race`)
     - Features: `feat/card-name` (e.g. `feat/step-detection`)
@@ -128,8 +136,8 @@ Dig into the problem before proposing solutions. Use `/research` for topics that
     git branch -d <branch>
     git push origin --delete <branch>
     ```
-28. **Move card to Done** — `move_card` to the "Done" list
-29. **Comment on the card** — Add a fix/feature summary to the Trello card: what changed, which files, what it fixes/adds, commit hash, and what needs manual testing. This leaves a paper trail for future debugging
+28. **Move card to Done** — `trello --board 69c42227 card move <card_id> Done`
+29. **Comment on the card** — `trello --board 69c42227 comment add <card_id> "<summary>"`. Include what changed, which files, what it fixes/adds, the commit hash(es), and what needs manual testing. Use real newlines in the text, not escape sequences. This leaves a paper trail for future debugging
 
 ---
 
