@@ -125,6 +125,13 @@ lock). On the **remote Trello backend** `grab` settles ties with a brief (~10-30
 claim-comment handshake internally — you never run it by hand. For a *specific named* card,
 skip `grab` and move it by hand (step 3 below).
 
+**Expect the card `grab` returns to differ from the one you just saw on top — that's
+normal, not a bug.** Between you eyeballing the board and `grab` running, another agent may
+have already claimed that top card, so `grab` atomically handed you the next one down. That
+race is the whole reason `grab` exists. Don't stop to investigate where the card you saw
+"went", and don't assume the board is inconsistent — just work the card `grab` actually
+returned.
+
 ### Then:
 
 1. **Claim the card** with `grab` — first, nothing before it.
