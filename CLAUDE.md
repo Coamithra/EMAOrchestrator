@@ -282,7 +282,14 @@ Dedicated screen for viewing the parsed runbook. Accessible via the "Runbook" bu
 
 ## Development Workflow
 
-**Every Trello card must follow the runbook in [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).** This is a 6-phase, 29-step process: pick up → research → design → implement → verify → review & ship. No skipping phases. Create a tracker doc before starting.
+**Every Trello card must follow the runbook in [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).** It is the global card-workflow runbook (now `~/.claude/CONTRIBUTING.md`, copied into `docs/`): pick up → research → design → implement → verify → review & ship. No skipping phases. Create a tracker doc before starting.
+
+EMAOrchestrator specifics for the runbook:
+- **Board:** EMAOrchestrator (https://trello.com/b/MibMpIB8/emaorchestrator), id `69c42227`, remote `trello` backend. Lists: Backlog -> In Progress -> Done. Atomic pickup: `trello --board 69c42227 grab --from "Backlog" --to "In Progress"`.
+- **Default branch:** `main` (the root checkout lives in `main/`). **GitHub:** solo repo (unprotected `main` -> PR + self-merge, no approval needed).
+- **Worktrees:** created as **sibling directories to `main/`** (e.g. `../feat-xxx/`, `../fix-yyy/`), NOT under `.trees/`. `node_modules/` doesn't carry over - run `npm install` in the new worktree first. Tracker doc goes in `docs/`.
+- **Verification gate:** `npm run typecheck` + `npm run lint` + `npm run build` clean; `npx vitest run`.
+- **Note (iceboxed):** the app itself parses `docs/CONTRIBUTING.md` as the runbook it drives agents through, so that file is kept (now holding the generic global runbook); repointing the app at `~/.claude/CONTRIBUTING.md` is deferred.
 
 ### Commands
 
