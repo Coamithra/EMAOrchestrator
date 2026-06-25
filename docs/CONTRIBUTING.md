@@ -60,6 +60,10 @@ this runbook as a checkbox list. Example:
 ## Phase 2: Research
 - [ ] Read the referenced code
 - [ ] Trace the call chain
+
+## Phase 3: Design
+- [ ] Settle the approach, get user approval
+- [ ] Post the short "here's my approach" comment on the card (before coding)
 ...
 ```
 
@@ -182,7 +186,7 @@ external context (SDK quirks, library contracts, API behaviour).
 - **Check for reusable patterns** — look for existing utilities and conventions before
   inventing new ones. Match the existing style rather than adding a parallel one.
 - **Align with the user** — present the plan, get approval before writing code.
-- **Comment the approach on the card** — once the approach is settled, post a SHORT TLDR
+- **Comment the approach on the card** — once the approach is settled (and before you write any code), post a SHORT TLDR
   comment so the board reflects the plan: `trello --board <id> comment add <card_id> "<tldr>"`.
   Just the general idea of what you'll do and why, NOT a full plan (point to the
   `plans/<file>.md` for the detail). Use real newlines in the comment, not escape sequences.
